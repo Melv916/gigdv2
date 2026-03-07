@@ -1,0 +1,3 @@
+insee_code,commune,departement_code,region_code,source,year,quarter,loyer_m2_cc_app_all,loyer_m2_cc_app_t1t2,loyer_m2_cc_app_t3plus,loyer_m2_cc_house,r2_app_all,r2_app_t1t2,r2_app_t3plus,r2_house,n_obs_app_all,n_obs_app_t1t2,n_obs_app_t3plus,n_obs_house,pred_int_low_app_all,pred_int_high_app_all,pred_int_low_house,pred_int_high_house
+91380,Chilly-Mazarin,91,11,ANIL_CarteDesLoyers,2025,Q3,18.2,20.5,16.4,15.1,0.72,0.70,0.68,0.61,120,55,65,40,15.8,21.3,13.2,17.4
+91220,Etampes,91,11,ANIL_CarteDesLoyers,2025,Q3,13.6,14.8,12.9,11.7,0.69,0.66,0.64,0.58,210,95,115,60,11.5,15.9,9.8,13.4

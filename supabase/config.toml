@@ -1,0 +1,13 @@
+project_id = "ggjedpzbwzwaiecyexyg"
+
+[functions.analyze-dvf]
+verify_jwt = false
+
+[functions.scrape-listing]
+verify_jwt = false
+
+[functions.import-dvf]
+verify_jwt = false
+
+[functions.gigd-v2-api]
+verify_jwt = false
