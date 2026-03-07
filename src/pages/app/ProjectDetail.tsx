@@ -396,17 +396,6 @@ const ProjectDetail = () => {
           dvfSummary = null;
         }
 
-        // Fallback to scrape-listing endpoint when V2 import is incomplete.
-        if (!listingData || !readNum(listingData?.prix) || !readNum(listingData?.surface)) {
-          const { data } = await supabase.functions.invoke("scrape-listing", {
-            body: { url },
-          });
-          if (data?.listing) {
-            listingData = data.listing;
-            if (!dvfSummary) dvfSummary = data.dvfSummary || null;
-          }
-        }
-
         prix = readNum(listingData?.prix) || prix;
         surface = readNum(listingData?.surface) || surface;
         if (listingData) {

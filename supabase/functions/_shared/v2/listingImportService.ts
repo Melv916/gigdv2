@@ -17,6 +17,72 @@ function toNumber(raw: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function textBetweenTags(html: string, tag: string): string | undefined {
+  const m = html.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
+  return m?.[1]?.replace(/\s+/g, " ").trim();
+}
+
+function fromRegexNum(html: string, patterns: RegExp[]): number | undefined {
+  for (const p of patterns) {
+    const m = html.match(p);
+    if (m?.[1]) {
+      const n = toNumber(m[1]);
+      if (n && n > 0) return n;
+    }
+  }
+  return undefined;
+}
+
+function fromRegexStr(html: string, patterns: RegExp[]): string | undefined {
+  for (const p of patterns) {
+    const m = html.match(p);
+    if (m?.[1]) return String(m[1]).trim();
+  }
+  return undefined;
+}
+
+function extractStructuredListing(html: string, url: string): ImportedListing | null {
+  if (!html) return null;
+
+  const title = textBetweenTags(html, "title");
+  const price = fromRegexNum(html, [
+    /"price"\s*:\s*"?([\d.,\s]+)"?/i,
+    /"prix"\s*:\s*"?([\d.,\s]+)"?/i,
+    /"amount"\s*:\s*"?([\d.,\s]+)"?/i,
+  ]);
+  const surface = fromRegexNum(html, [
+    /"livingArea"\s*:\s*"?([\d.,\s]+)"?/i,
+    /"floorSize"\s*:\s*\{[^}]*"value"\s*:\s*"?([\d.,\s]+)"?/i,
+    /"surface"\s*:\s*"?([\d.,\s]+)"?/i,
+  ]);
+  const codePostal = fromRegexStr(html, [
+    /"postalCode"\s*:\s*"(\d{5})"/i,
+    /"codePostal"\s*:\s*"(\d{5})"/i,
+  ]);
+  const ville = fromRegexStr(html, [
+    /"addressLocality"\s*:\s*"([^"]+)"/i,
+    /"city"\s*:\s*"([^"]+)"/i,
+    /"ville"\s*:\s*"([^"]+)"/i,
+  ]);
+  const pieces = fromRegexNum(html, [
+    /"numberOfRooms"\s*:\s*"?([\d.,\s]+)"?/i,
+    /"rooms"\s*:\s*"?([\d.,\s]+)"?/i,
+    /"pieces"\s*:\s*"?([\d.,\s]+)"?/i,
+  ]);
+
+  if (!price && !surface && !codePostal) return null;
+  return {
+    titre: title || "Annonce importee",
+    prix: price,
+    surface: surface,
+    pieces: pieces ? Math.round(pieces) : undefined,
+    codePostal,
+    ville,
+    typeLocal: /maison/i.test(html) ? "Maison" : "Appartement",
+    vendeur: /agence|orpi|laforet|century|iad/i.test(new URL(url).hostname + " " + html) ? "agence" : "inconnu",
+  };
+}
+
 function extractHeuristic(text: string, url: string): ImportedListing {
   const priceMatch = text.match(/(\d[\d\s]{3,})\s?(€|eur)/i);
   const surfaceMatch = text.match(/(\d{1,3}(?:[.,]\d{1,2})?)\s?m2\b/i);
@@ -48,6 +114,7 @@ export async function importListingFromUrl(url: string): Promise<{
 
   const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
   let markdown = "";
+  let rawHtml = "";
   if (firecrawlKey) {
     const scrapeRes = await fetch(FIRECRAWL_API, {
       method: "POST",
@@ -68,6 +135,11 @@ export async function importListingFromUrl(url: string): Promise<{
     }
   }
 
+  const pageRes = await fetch(canonicalUrl, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; GIGD/2.0)" },
+  });
+  rawHtml = pageRes.ok ? await pageRes.text() : "";
+
   if (!markdown || markdown.length < 60) {
     const pageRes = await fetch(canonicalUrl, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; GIGD/2.0)" },
@@ -81,6 +153,7 @@ export async function importListingFromUrl(url: string): Promise<{
   }
 
   const aiKey = Deno.env.get("LOVABLE_API_KEY");
+  const structured = extractStructuredListing(rawHtml, canonicalUrl);
 
   const prompt = `Extrait UNIQUEMENT un JSON de cette annonce.
 {
@@ -101,7 +174,7 @@ Annonce:
 ${markdown.slice(0, 8000)}
 `;
 
-  let listing: ImportedListing | null = null;
+  let listing: ImportedListing | null = structured;
   if (aiKey) {
     const aiRes = await fetch(AI_GATEWAY_URL, {
       method: "POST",
@@ -120,7 +193,16 @@ ${markdown.slice(0, 8000)}
       const content = aiData.choices?.[0]?.message?.content || "";
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       try {
-        listing = JSON.parse(jsonMatch ? jsonMatch[0] : content) as ImportedListing;
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content) as ImportedListing;
+        listing = {
+          ...parsed,
+          prix: parsed.prix || structured?.prix,
+          surface: parsed.surface || structured?.surface,
+          codePostal: parsed.codePostal || structured?.codePostal,
+          ville: parsed.ville || structured?.ville,
+          pieces: parsed.pieces || structured?.pieces,
+          titre: parsed.titre || structured?.titre,
+        };
       } catch {
         listing = null;
       }
@@ -128,6 +210,17 @@ ${markdown.slice(0, 8000)}
   }
 
   if (!listing) listing = extractHeuristic(markdown, canonicalUrl);
+  if (listing && structured) {
+    listing = {
+      ...listing,
+      prix: listing.prix || structured.prix,
+      surface: listing.surface || structured.surface,
+      codePostal: listing.codePostal || structured.codePostal,
+      ville: listing.ville || structured.ville,
+      pieces: listing.pieces || structured.pieces,
+      titre: listing.titre || structured.titre,
+    };
+  }
 
   const db = dbClient();
   const { data: localDvf } = await db
