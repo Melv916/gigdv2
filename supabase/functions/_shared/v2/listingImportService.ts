@@ -84,8 +84,8 @@ function extractStructuredListing(html: string, url: string): ImportedListing | 
 }
 
 function extractHeuristic(text: string, url: string): ImportedListing {
-  const priceMatch = text.match(/(\d[\d\s]{3,})\s?(â‚¬|eur)/i);
-  const surfaceMatch = text.match(/(\d{1,3}(?:[.,]\d{1,2})?)\s?m2\b/i);
+  const priceMatch = text.match(/(\d[\d\s.,]{3,})\s?(€|eur|euro|euros)\b/i);
+  const surfaceMatch = text.match(/(\d{1,3}(?:[.,]\d{1,2})?)\s?m(?:2|²)\b/i);
   const cpMatch = text.match(/\b\d{5}\b/);
   const title = text.split("\n").map((l) => l.trim()).find((l) => l.length > 8 && l.length < 140) || "Annonce importee";
   const host = new URL(url).hostname.replace(/^www\./, "");
@@ -146,14 +146,15 @@ export async function importListingFromUrl(url: string): Promise<{
     });
     const html = pageRes.ok ? await pageRes.text() : "";
     markdown = stripHtml(html);
+    if (!rawHtml && html) rawHtml = html;
   }
 
-  if (!markdown || markdown.length < 60) {
+  const structured = extractStructuredListing(rawHtml, canonicalUrl);
+  if ((!markdown || markdown.length < 60) && !structured) {
     return { canonicalUrl, listing: { titre: "Annonce importee", vendeur: "inconnu" }, dvfSummary: {} };
   }
 
   const aiKey = Deno.env.get("LOVABLE_API_KEY");
-  const structured = extractStructuredListing(rawHtml, canonicalUrl);
 
   const prompt = `Extrait UNIQUEMENT un JSON de cette annonce.
 {
@@ -209,7 +210,11 @@ ${markdown.slice(0, 8000)}
     }
   }
 
-  if (!listing) listing = extractHeuristic(markdown, canonicalUrl);
+  if (!listing) {
+    listing = markdown && markdown.length >= 60
+      ? extractHeuristic(markdown, canonicalUrl)
+      : { titre: "Annonce importee", vendeur: "inconnu" };
+  }
   if (listing && structured) {
     listing = {
       ...listing,
@@ -254,3 +259,4 @@ ${markdown.slice(0, 8000)}
     },
   };
 }
+
