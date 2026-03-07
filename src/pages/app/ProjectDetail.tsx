@@ -60,6 +60,17 @@ interface AnalysisResult {
   scriptAgence: string[];
 }
 
+type CityMarketPriceRow = {
+  insee_code: string | null;
+  commune: string | null;
+  departement_code: string | null;
+  rent_m2_app_all: number | null;
+  rent_m2_app_t1t2: number | null;
+  rent_m2_app_t3plus: number | null;
+  rent_m2_house: number | null;
+  sale_m2_all: number | null;
+};
+
 const objectifLabels: Record<string, string> = { rp: "RP", locatif: "Locatif", marchand: "Marchand" };
 const strategieLabels: Record<string, string> = { "ld-nue": "LD nue", meuble: "Meublé", coloc: "Coloc", lcd: "LCD" };
 
@@ -151,6 +162,62 @@ function inferTypology(surface: number, pieces?: number | null): "all" | "t1t2" 
   if (surface > 0) return surface <= 45 ? "t1t2" : "t3plus";
   return "all";
 }
+
+function normalizeCity(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toLowerCase();
+}
+
+function pickRentM2(
+  row: CityMarketPriceRow | null,
+  type: "house" | "apartment",
+  typology: "all" | "t1t2" | "t3plus",
+): number {
+  if (!row) return 0;
+  if (type === "house") return Number(row.rent_m2_house || row.rent_m2_app_all || 0);
+  if (typology === "t1t2") return Number(row.rent_m2_app_t1t2 || row.rent_m2_app_all || 0);
+  if (typology === "t3plus") return Number(row.rent_m2_app_t3plus || row.rent_m2_app_all || 0);
+  return Number(row.rent_m2_app_all || 0);
+}
+
+async function fetchCityMarketReference(args: {
+  insee?: string;
+  ville?: string;
+  departementCode?: string;
+}): Promise<CityMarketPriceRow | null> {
+  const insee = String(args.insee || "").trim();
+  const ville = String(args.ville || "").trim();
+  const departementCode = String(args.departementCode || "").trim();
+
+  if (insee) {
+    const { data } = await supabase
+      .from("city_market_prices")
+      .select("insee_code,commune,departement_code,rent_m2_app_all,rent_m2_app_t1t2,rent_m2_app_t3plus,rent_m2_house,sale_m2_all")
+      .eq("insee_code", insee)
+      .maybeSingle();
+    if (data) return data as CityMarketPriceRow;
+  }
+
+  if (ville && departementCode) {
+    const { data } = await supabase
+      .from("city_market_prices")
+      .select("insee_code,commune,departement_code,rent_m2_app_all,rent_m2_app_t1t2,rent_m2_app_t3plus,rent_m2_house,sale_m2_all")
+      .eq("departement_code", departementCode)
+      .ilike("commune", ville)
+      .limit(10);
+    if (data && data.length > 0) {
+      const expected = normalizeCity(ville);
+      const exact = data.find((r: any) => normalizeCity(String(r.commune || "")) === expected);
+      return (exact || data[0]) as CityMarketPriceRow;
+    }
+  }
+
+  return null;
+}
+
 const ProjectDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
@@ -203,7 +270,6 @@ const ProjectDetail = () => {
       .then(({ data }) => {
         if (data) {
           setProject(data as unknown as Project);
-          setTravaux(Number(data.budget_travaux) > 0 ? Number(data.budget_travaux) : 0);
         }
         setLoading(false);
       });
@@ -297,6 +363,7 @@ const ProjectDetail = () => {
       let dvfSummary: any = null;
       let prix = manualPrix;
       let surface = manualSurface;
+      let cityMarketRef: CityMarketPriceRow | null = null;
 
       if (url) {
         const imported = await importAnalysisUrl(url);
@@ -307,40 +374,22 @@ const ProjectDetail = () => {
         if (listingData) setListing(listingData);
       }
 
-      // Sale m2 fallback from aggregated city_market_prices when DVF summary is missing.
-      if (!Number(dvfSummary?.medianePrixM2 || 0)) {
-        const insee = String((listingData as any)?.insee || "").trim();
-        const codePostal = String(listingData?.codePostal || manualCP || "").trim();
-        const departementCode =
-          codePostal.length >= 2
-            ? codePostal.startsWith("97") && codePostal.length >= 3
-              ? codePostal.slice(0, 3)
-              : codePostal.slice(0, 2)
-            : null;
+      const listingCodePostal = String(listingData?.codePostal || manualCP || "").trim();
+      const listingDepartementCode =
+        listingCodePostal.length >= 2
+          ? listingCodePostal.startsWith("97") && listingCodePostal.length >= 3
+            ? listingCodePostal.slice(0, 3)
+            : listingCodePostal.slice(0, 2)
+          : "";
+      cityMarketRef = await fetchCityMarketReference({
+        insee: String((listingData as any)?.insee || "").trim(),
+        ville: String(listingData?.ville || "").trim(),
+        departementCode: listingDepartementCode,
+      });
 
-        if (insee) {
-          const { data: city } = await supabase
-            .from("city_market_prices")
-            .select("sale_m2_all")
-            .eq("insee_code", insee)
-            .maybeSingle();
-          if (Number(city?.sale_m2_all || 0) > 0) {
-            dvfSummary = { ...(dvfSummary || {}), medianePrixM2: Number(city?.sale_m2_all) };
-          }
-        } else if (departementCode) {
-          const { data: deptRows } = await supabase
-            .from("city_market_prices")
-            .select("sale_m2_all")
-            .eq("departement_code", departementCode)
-            .limit(1500);
-          const values = (deptRows || [])
-            .map((r: any) => Number(r.sale_m2_all || 0))
-            .filter((n: number) => Number.isFinite(n) && n > 0);
-          if (values.length > 0) {
-            const avg = Math.round(values.reduce((a: number, b: number) => a + b, 0) / values.length);
-            dvfSummary = { ...(dvfSummary || {}), medianePrixM2: avg };
-          }
-        }
+      // Sale m2 reference from city_market_prices (your city table) in priority.
+      if (Number(cityMarketRef?.sale_m2_all || 0) > 0) {
+        dvfSummary = { ...(dvfSummary || {}), medianePrixM2: Number(cityMarketRef?.sale_m2_all) };
       }
 
       if (!prix || !surface) {
@@ -367,6 +416,15 @@ const ProjectDetail = () => {
       const mensualiteTotaleLocal = mensualiteCreditLocal + assuranceMensuelleLocal;
 
       let loyerPourCalc = loyerEstime || 0;
+      if (!loyerPourCalc && surface > 0) {
+        const type = /maison/i.test(String(listingData?.typeLocal || "")) ? "house" : "apartment";
+        const typology = inferTypology(Number(surface), Number(listingData?.pieces || 0) || undefined);
+        const rentM2FromCityTable = pickRentM2(cityMarketRef, type, typology);
+        if (rentM2FromCityTable > 0) {
+          loyerPourCalc = Math.round(rentM2FromCityTable * Number(surface));
+          setLoyerEstime(loyerPourCalc);
+        }
+      }
       if (!loyerPourCalc && surface > 0) {
         try {
           const codePostal = String(listingData?.codePostal || manualCP || "").trim();
@@ -563,19 +621,6 @@ const ProjectDetail = () => {
       }))
     : [];
 
-  // Good points detection
-  const goodPoints: { point: string; impact: string }[] = [];
-  if (aiResult) {
-    const prixM2 = activePrix && activeSurface ? activePrix / activeSurface : 0;
-    const dvfMedian = parseFloat(String(aiResult.prixM2Dvf || "0").replace(/[^0-9]/g, "")) || 0;
-    if (dvfMedian > 0 && prixM2 < dvfMedian) goodPoints.push({ point: "Prix/m² sous la médiane DVF locale", impact: `${Math.round(dvfMedian - prixM2)}€/m² en dessous` });
-    if (listing?.dpe && ["A", "B", "C", "D"].includes(listing.dpe.toUpperCase())) goodPoints.push({ point: `DPE correct (${listing.dpe})`, impact: "Pas de travaux énergétiques immédiats" });
-    const cf = parseFloat(String(aiResult.cashFlow || "0").replace(/[^0-9.-]/g, "")) || 0;
-    if (cf > 0) goodPoints.push({ point: "Cash-flow positif", impact: aiResult.cashFlow });
-    const score = parseInt(String(aiResult.score || "0").replace(/[^0-9]/g, "")) || 0;
-    if (score >= 70) goodPoints.push({ point: "Score de confiance élevé", impact: aiResult.score });
-  }
-
   const prixAnnonceNum = aiResult ? Number(String(aiResult.prixAnnonce).replace(/[^0-9.-]/g, "")) : 0;
   const loyerEstimeNum = loyerEstime > 0
     ? loyerEstime
@@ -605,6 +650,84 @@ const ProjectDetail = () => {
   const marketSourceLine = marketSources.length > 0
     ? `Source: data.gouv.fr (${marketSources[0]?.dataset_id || "n/a"}/${marketSources[0]?.resource_id || "n/a"})`
     : null;
+  const cashFlowMensuelNum = aiResult ? Number(String(aiResult.cashFlow || "0").replace(/[^0-9.-]/g, "")) : 0;
+  const priceM2Annonce = activePrix > 0 && activeSurface > 0 ? activePrix / activeSurface : 0;
+  const dvfMedianRef = dvfMedianEnriched > 0
+    ? dvfMedianEnriched
+    : Number(String(aiResult?.prixM2Dvf || "0").replace(/[^0-9.-]/g, ""));
+  const pointsFortsDecision: { point: string; impact: string }[] = [];
+  const pointsFaiblesDecision: { flag: string; impact: string }[] = [];
+
+  if (rendementTargetReached) {
+    pointsFortsDecision.push({
+      point: "Rendement brut au niveau cible",
+      impact: `${formatPct(rendementBrutCalc)} (objectif 8%)`,
+    });
+  } else {
+    pointsFaiblesDecision.push({
+      flag: "Rendement brut sous cible",
+      impact: `${formatPct(rendementBrutCalc)} ; loyer cible 8%: ${formatEUR(minRent8)}/mois`,
+    });
+  }
+
+  if (ecartNego > 0) {
+    pointsFaiblesDecision.push({
+      flag: "Positionnement prix a renegocier",
+      impact: `${formatEUR(ecartNego)} a negocier (${formatPct(ecartNegoPct)}) pour atteindre 8% brut`,
+    });
+  } else if (basePrixRendement > 0 && prixCibleRendement8 > 0) {
+    pointsFortsDecision.push({
+      point: "Prix coherent avec la cible de rendement",
+      impact: "Pas de negociation requise pour la cible 8% brut",
+    });
+  }
+
+  if (dvfMedianRef > 0 && priceM2Annonce > 0) {
+    const ecartPrixM2Pct = ((priceM2Annonce - dvfMedianRef) / dvfMedianRef) * 100;
+    if (ecartPrixM2Pct <= -5) {
+      pointsFortsDecision.push({
+        point: "Prix/m² sous la reference locale",
+        impact: `${formatPct(Math.abs(ecartPrixM2Pct))} sous la mediane`,
+      });
+    } else if (ecartPrixM2Pct >= 5) {
+      pointsFaiblesDecision.push({
+        flag: "Prix/m² au-dessus du marche local",
+        impact: `${formatPct(ecartPrixM2Pct)} au-dessus de la mediane locale`,
+      });
+    }
+  }
+
+  if (cashFlowMensuelNum > 0) {
+    pointsFortsDecision.push({
+      point: "Cash-flow mensuel positif",
+      impact: formatEUR(cashFlowMensuelNum),
+    });
+  } else {
+    pointsFaiblesDecision.push({
+      flag: "Cash-flow mensuel negatif",
+      impact: formatEUR(Math.abs(cashFlowMensuelNum)),
+    });
+  }
+
+  const dpe = String(listing?.dpe || "").toUpperCase();
+  if (["A", "B", "C", "D"].includes(dpe)) {
+    pointsFortsDecision.push({
+      point: `DPE ${dpe}`,
+      impact: "Risque reglementaire/energetique plus limite",
+    });
+  } else if (["E", "F", "G"].includes(dpe)) {
+    pointsFaiblesDecision.push({
+      flag: `DPE ${dpe}`,
+      impact: "Travaux energetiques possibles, a chiffrer avant offre",
+    });
+  }
+
+  if (marketStatus !== "ok") {
+    pointsFaiblesDecision.push({
+      flag: "Donnees de marche partielles",
+      impact: "Decision possible mais confiance reduite sur le positionnement local",
+    });
+  }
   const projectionChartData = projections.map((p) => ({
     ...p,
     valeurBienPct: projectionBase > 0 ? (p.valeurBien / projectionBase) * 100 : null,
@@ -1015,7 +1138,7 @@ const ProjectDetail = () => {
                       <div>
                         <p className="analysis-label mb-2 flex items-center gap-2"><CheckCircle2 size={13} strokeWidth={1.5} className="text-green-400" /> Points forts</p>
                         <ul className="analysis-list">
-                          {goodPoints.length > 0 ? goodPoints.map((g, i) => (
+                          {pointsFortsDecision.length > 0 ? pointsFortsDecision.map((g, i) => (
                             <li key={i}><span className="text-foreground">{g.point}</span> <span className="text-green-400">({g.impact})</span></li>
                           )) : <li>Aucun point positif détecté.</li>}
                         </ul>
@@ -1023,9 +1146,9 @@ const ProjectDetail = () => {
                       <div>
                         <p className="analysis-label mb-2 flex items-center gap-2"><AlertTriangle size={13} strokeWidth={1.5} className="text-amber-400" /> Points faibles / risques</p>
                         <ul className="analysis-list">
-                          {aiResult.redFlags?.map((r, i) => (
+                          {pointsFaiblesDecision.length > 0 ? pointsFaiblesDecision.map((r, i) => (
                             <li key={i}><span className="text-foreground">{r.flag}</span> <span className="text-amber-400">(Impact : {r.impact})</span></li>
-                          ))}
+                          )) : <li>Aucun risque majeur détecté.</li>}
                         </ul>
                       </div>
                     </div>

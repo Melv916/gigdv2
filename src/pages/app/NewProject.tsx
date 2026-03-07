@@ -32,8 +32,6 @@ const NewProject = () => {
     assurance_emprunteur: 0.34,
     frais_notaire_pct: 8,
     vacance_locative: 1,
-    charges_non_recup: 0,
-    budget_travaux: 0,
     croissance_valeur: 2,
     croissance_loyers: 2,
     inflation_charges: 2,
@@ -51,7 +49,7 @@ const NewProject = () => {
     setSaving(true);
     const { data, error } = await supabase
       .from("projects")
-      .insert({ ...form, user_id: user.id })
+      .insert({ ...form, user_id: user.id, charges_non_recup: 0, budget_travaux: 0 })
       .select("id")
       .single();
     if (error) {
@@ -197,26 +195,6 @@ const NewProject = () => {
                         <div className="space-y-2">
                           <Label className="text-foreground text-xs">Vacance locative (mois/an)</Label>
                           <Input type="number" value={form.vacance_locative} onChange={(e) => update("vacance_locative", +e.target.value)} className="bg-muted/30 border-border/50" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-foreground text-xs">Charges non récup. (€/mois)</Label>
-                          <Input type="number" value={form.charges_non_recup} onChange={(e) => update("charges_non_recup", +e.target.value)} className="bg-muted/30 border-border/50" />
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="text-foreground text-xs">Budget travaux</Label>
-                        <div className="grid grid-cols-5 gap-2 mt-2">
-                          {[0, 5000, 10000, 20000, -1].map((v) => (
-                            <button
-                              key={v}
-                              className={selectBtn(form.budget_travaux === v)}
-                              onClick={() => update("budget_travaux", v)}
-                            >
-                              <p className="text-xs font-semibold text-center">
-                                {v === -1 ? "?" : v === 0 ? "0€" : `${v / 1000}k€`}
-                              </p>
-                            </button>
-                          ))}
                         </div>
                       </div>
                       <div className="grid grid-cols-3 gap-4">
