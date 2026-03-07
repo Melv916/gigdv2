@@ -86,6 +86,27 @@ function formatPct(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
+function readNum(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (value === null || value === undefined) return 0;
+  const raw = String(value).trim();
+  if (!raw) return 0;
+  const compact = raw.replace(/\s/g, "").replace(/'/g, "");
+  const cleaned = compact.replace(/[^\d,.-]/g, "");
+  if (!cleaned) return 0;
+  let normalized = cleaned;
+  if (cleaned.includes(",") && cleaned.includes(".")) {
+    normalized =
+      cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")
+        ? cleaned.replace(/\./g, "").replace(",", ".")
+        : cleaned.replace(/,/g, "");
+  } else if (cleaned.includes(",")) {
+    normalized = cleaned.replace(",", ".");
+  }
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function computeGrossYield(loyerMensuel: number, basePrix: number): number {
   if (!Number.isFinite(loyerMensuel) || !Number.isFinite(basePrix) || loyerMensuel <= 0 || basePrix <= 0) return 0;
   return (loyerMensuel * 12 * 100) / basePrix;
@@ -366,12 +387,37 @@ const ProjectDetail = () => {
       let cityMarketRef: CityMarketPriceRow | null = null;
 
       if (url) {
-        const imported = await importAnalysisUrl(url);
-        listingData = imported?.listing || null;
-        dvfSummary = imported?.dvfSummary || null;
-        prix = Number(listingData?.prix || 0) || prix;
-        surface = Number(listingData?.surface || 0) || surface;
-        if (listingData) setListing(listingData);
+        try {
+          const imported = await importAnalysisUrl(url);
+          listingData = imported?.listing || null;
+          dvfSummary = imported?.dvfSummary || null;
+        } catch {
+          listingData = null;
+          dvfSummary = null;
+        }
+
+        // Fallback to scrape-listing endpoint when V2 import is incomplete.
+        if (!listingData || !readNum(listingData?.prix) || !readNum(listingData?.surface)) {
+          const { data } = await supabase.functions.invoke("scrape-listing", {
+            body: { url },
+          });
+          if (data?.listing) {
+            listingData = data.listing;
+            if (!dvfSummary) dvfSummary = data.dvfSummary || null;
+          }
+        }
+
+        prix = readNum(listingData?.prix) || prix;
+        surface = readNum(listingData?.surface) || surface;
+        if (listingData) {
+          listingData = {
+            ...listingData,
+            prix: readNum(listingData?.prix) || listingData?.prix,
+            surface: readNum(listingData?.surface) || listingData?.surface,
+            pieces: readNum(listingData?.pieces) || listingData?.pieces,
+          };
+          setListing(listingData);
+        }
       }
 
       const listingCodePostal = String(listingData?.codePostal || manualCP || "").trim();
