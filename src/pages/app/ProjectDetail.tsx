@@ -203,6 +203,26 @@ function normalizeCity(value: string): string {
     .toLowerCase();
 }
 
+function normalizeInsee(value: string): string {
+  const raw = String(value || "").trim().toUpperCase().replace(/\s/g, "");
+  if (!raw) return "";
+  if (/^\d+$/.test(raw)) return raw.padStart(5, "0");
+  if (/^(2A|2B)\d{1,3}$/.test(raw)) return raw.slice(0, 2) + raw.slice(2).padStart(3, "0");
+  return raw;
+}
+
+function normalizePostalCode(value: string): string {
+  return String(value || "").replace(/\D/g, "").slice(0, 5);
+}
+
+function cleanCityForLookup(value: string): string {
+  return String(value || "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\b\d{5}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function pickRentM2(
   row: CityMarketPriceRow | null,
   type: "house" | "apartment",
@@ -221,9 +241,9 @@ async function fetchCityMarketReference(args: {
   postalCode?: string;
   departementCode?: string;
 }): Promise<CityMarketPriceRow | null> {
-  const insee = String(args.insee || "").trim();
-  const ville = String(args.ville || "").trim();
-  const postalCode = String(args.postalCode || "").trim();
+  const insee = normalizeInsee(String(args.insee || "").trim());
+  const ville = cleanCityForLookup(String(args.ville || "").trim());
+  const postalCode = normalizePostalCode(String(args.postalCode || "").trim());
   const departementCode = String(args.departementCode || "").trim();
 
   if (insee) {
@@ -235,22 +255,37 @@ async function fetchCityMarketReference(args: {
     if (data) return data as CityMarketPriceRow;
   }
 
-  if (ville) {
+  if (ville || departementCode) {
     let query = supabase
       .from("city_market_prices")
-      .select("*")
-      .ilike("commune", ville)
-      .limit(25);
-    if (departementCode) query = query.eq("departement_code", departementCode);
+      .select("*");
+    if (departementCode) {
+      query = query.eq("departement_code", departementCode).limit(5000);
+    } else if (ville) {
+      query = query.ilike("commune", `%${ville}%`).limit(200);
+    } else {
+      query = query.limit(200);
+    }
+
     const { data } = await query;
     if (data && data.length > 0) {
       const expected = normalizeCity(ville);
-      const exact = data.find((r: any) => normalizeCity(String(r.commune || "")) === expected);
-      const selected = (exact || data[0]) as CityMarketPriceRow;
-      if (postalCode && selected?.departement_code && !postalCode.startsWith(String(selected.departement_code))) {
-        return null;
-      }
-      return selected;
+      const ranked = data
+        .map((r: any) => {
+          const communeNorm = normalizeCity(String(r.commune || ""));
+          let score = 0;
+          if (expected && communeNorm === expected) score += 100;
+          else if (expected && communeNorm.startsWith(expected)) score += 70;
+          else if (expected && communeNorm.includes(expected)) score += 50;
+          if (postalCode && r.departement_code && postalCode.startsWith(String(r.departement_code))) score += 20;
+          if (Number(r.rent_m2_app_all || r.loyer_m2_moyen || 0) > 0) score += 10;
+          if (Number(r.sale_m2_all || r.prix_m2_moyen || 0) > 0) score += 10;
+          return { row: r as CityMarketPriceRow, score };
+        })
+        .sort((a, b) => b.score - a.score);
+
+      const selected = ranked[0]?.row || null;
+      if (selected) return selected;
     }
   }
 
@@ -402,7 +437,7 @@ const ProjectDetail = () => {
         }
       }
 
-      const listingCodePostal = String(listingData?.codePostal || manualCP || "").trim();
+      const listingCodePostal = normalizePostalCode(String(listingData?.codePostal || manualCP || "").trim());
       const listingDepartementCode =
         listingCodePostal.length >= 2
           ? listingCodePostal.startsWith("97") && listingCodePostal.length >= 3
@@ -657,17 +692,18 @@ const ProjectDetail = () => {
     ? loyerEstime
     : Number(String(aiResult?.loyerEstime || "").replace(/[^0-9.-]/g, "")) || 0;
   const basePrixRendement = prixAnnonceNum > 0 ? prixAnnonceNum : coutGlobal;
-  const rendementBrutCalc = computeGrossYield(loyerEstimeNum, basePrixRendement);
+  const hasRentForYield = loyerEstimeNum > 0 && basePrixRendement > 0;
+  const rendementBrutCalc = hasRentForYield ? computeGrossYield(loyerEstimeNum, basePrixRendement) : null;
   const minRent8 = computeMinRentForTargetYield(basePrixRendement, 0.08);
-  const rendementTargetReached = rendementBrutCalc >= 8;
-  const prixCibleRendement8 = loyerEstimeNum > 0 ? (loyerEstimeNum * 12) / 0.08 : 0;
-  const ecartNego = !rendementTargetReached && basePrixRendement > 0 && prixCibleRendement8 > 0
+  const rendementTargetReached = rendementBrutCalc !== null && rendementBrutCalc >= 8;
+  const prixCibleRendement8 = hasRentForYield ? (loyerEstimeNum * 12) / 0.08 : 0;
+  const ecartNego = hasRentForYield && !rendementTargetReached && basePrixRendement > 0 && prixCibleRendement8 > 0
     ? Math.max(0, basePrixRendement - prixCibleRendement8)
     : 0;
   const ecartNegoPct = basePrixRendement > 0 && ecartNego > 0 ? (ecartNego / basePrixRendement) * 100 : 0;
   const fraisNotairePrixCible = params && prixCibleRendement8 > 0 ? calcFraisNotaire(prixCibleRendement8, params.frais_notaire_pct) : 0;
   const coutGlobalPrixCible = prixCibleRendement8 > 0 ? calcCoutGlobal(prixCibleRendement8, fraisNotairePrixCible, travaux, autresCouts) : 0;
-  const rendementAbove10 = rendementBrutCalc > 10;
+  const rendementAbove10 = rendementBrutCalc !== null && rendementBrutCalc > 10;
   const projectionBase = basePrixRendement > 0 ? basePrixRendement : 0;
   const marketPriceRef = Number(marketData?.marketPricePerSqm || 0);
   const marketRentRef = Number(marketData?.marketRentPerSqm || 0);
@@ -686,15 +722,20 @@ const ProjectDetail = () => {
   const pointsFortsDecision: { point: string; impact: string }[] = [];
   const pointsFaiblesDecision: { flag: string; impact: string }[] = [];
 
-  if (rendementTargetReached) {
+  if (!hasRentForYield) {
+    pointsFaiblesDecision.push({
+      flag: "Loyer marché indisponible",
+      impact: "Impossible de calculer le rendement brut sans loyer mensuel",
+    });
+  } else if (rendementTargetReached) {
     pointsFortsDecision.push({
       point: "Rendement brut au niveau cible",
-      impact: `${formatPct(rendementBrutCalc)} (objectif 8%)`,
+      impact: `${formatPct(Number(rendementBrutCalc || 0))} (objectif 8%)`,
     });
   } else {
     pointsFaiblesDecision.push({
       flag: "Rendement brut sous cible",
-      impact: `${formatPct(rendementBrutCalc)} ; loyer cible 8%: ${formatEUR(minRent8)}/mois`,
+      impact: `${formatPct(Number(rendementBrutCalc || 0))} ; loyer cible 8%: ${formatEUR(minRent8)}/mois`,
     });
   }
 
@@ -703,7 +744,7 @@ const ProjectDetail = () => {
       flag: "Positionnement prix a renegocier",
       impact: `${formatEUR(ecartNego)} a negocier (${formatPct(ecartNegoPct)}) pour atteindre 8% brut`,
     });
-  } else if (basePrixRendement > 0 && prixCibleRendement8 > 0) {
+  } else if (hasRentForYield && basePrixRendement > 0 && prixCibleRendement8 > 0) {
     pointsFortsDecision.push({
       point: "Prix coherent avec la cible de rendement",
       impact: "Pas de negociation requise pour la cible 8% brut",
@@ -1021,15 +1062,17 @@ const ProjectDetail = () => {
                   </div>
                   <div className="analysis-cockpit-subcard p-4">
                     <p className="analysis-label flex items-center gap-2"><BarChart3 size={14} strokeWidth={1.5} className="analysis-icon" /> Rendement brut</p>
-                    <p className="analysis-kpi">{formatPct(rendementBrutCalc)}</p>
+                    <p className="analysis-kpi">{rendementBrutCalc !== null ? formatPct(rendementBrutCalc) : "n/a"}</p>
                     <div className="flex flex-wrap items-center gap-2 mt-1">
-                      <span className={`analysis-yield-badge ${rendementTargetReached ? "analysis-yield-badge-ok" : "analysis-yield-badge-low"}`}>
-                        {rendementTargetReached ? "OK (≥ 8%)" : "Sous objectif"}
+                      <span className={`analysis-yield-badge ${!hasRentForYield ? "analysis-yield-badge-low" : rendementTargetReached ? "analysis-yield-badge-ok" : "analysis-yield-badge-low"}`}>
+                        {!hasRentForYield ? "Indispo (loyer manquant)" : rendementTargetReached ? "OK (≥ 8%)" : "Sous objectif"}
                       </span>
                       {rendementAbove10 && <span className="analysis-yield-badge analysis-yield-badge-high">Au-dessus de la cible (10%+)</span>}
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
-                      {rendementTargetReached
+                      {!hasRentForYield
+                        ? "Ajoute un loyer estimé mensuel pour calculer le rendement brut."
+                        : rendementTargetReached
                         ? "Objectif investisseur atteint (8–10%)."
                         : <>Pour atteindre 8% de rendement brut, il faut un loyer ≥ <span className="text-primary font-semibold">{formatEUR(minRent8)}/mois</span>.</>}
                     </p>
@@ -1055,13 +1098,19 @@ const ProjectDetail = () => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
                       { icon: Tag, label: "Prix annoncé", value: aiResult.prixAnnonce, sub: aiResult.prixM2 },
-                      { icon: Tag, label: "Prix cible (8% brut)", value: prixCibleRendement8 > 0 ? formatEUR(prixCibleRendement8) : "n/a", sub: "hors frais" },
-                      { icon: Tag, label: "Coût global cible", value: prixCibleRendement8 > 0 ? formatEUR(coutGlobalPrixCible) : "n/a", sub: "prix cible + notaire + travaux" },
+                      { icon: Tag, label: "Prix cible (8% brut)", value: hasRentForYield && prixCibleRendement8 > 0 ? formatEUR(prixCibleRendement8) : "n/a", sub: "hors frais" },
+                      { icon: Tag, label: "Coût global cible", value: hasRentForYield && prixCibleRendement8 > 0 ? formatEUR(coutGlobalPrixCible) : "n/a", sub: "prix cible + notaire + travaux" },
                       {
                         icon: Target,
-                        label: "Écart négo",
-                        value: `${formatEUR(ecartNego)}${ecartNegoPct > 0 ? ` (${formatPct(ecartNegoPct)})` : ""}`,
-                        sub: ecartNego > 0 ? "capital a negocier pour atteindre 8% brut" : "pas besoin de negocier (8% brut deja atteint)",
+                        label: "Ecart nego",
+                        value: hasRentForYield
+                          ? `${formatEUR(ecartNego)}${ecartNegoPct > 0 ? ` (${formatPct(ecartNegoPct)})` : ""}`
+                          : "n/a",
+                        sub: !hasRentForYield
+                          ? "loyer marche indisponible, ecart non calculable"
+                          : ecartNego > 0
+                            ? "capital a negocier pour atteindre 8% brut"
+                            : "pas besoin de negocier (8% brut deja atteint)",
                       },
                     ].map((s) => (
                       <div key={s.label} className="analysis-kpi-box">
