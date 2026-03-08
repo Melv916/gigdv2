@@ -219,6 +219,7 @@ function cleanCityForLookup(value: string): string {
   const v = String(value || "")
     .replace(/\([^)]*\)/g, " ")
     .replace(/\b\d{5}\b/g, " ")
+    .replace(/\b\d{2,3}\b/g, " ")
     .replace(/\b\d+(?:er|e|eme)?\s*arr(?:ondissement)?\b/gi, " ")
     .replace(/\barr(?:ondissement)?\b/gi, " ")
     .replace(/\bcedex\b/gi, " ")

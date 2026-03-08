@@ -36,6 +36,19 @@ function fromRegexStr(html: string, patterns: RegExp[]): string | undefined {
   return undefined;
 }
 
+function sanitizeCity(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const cleaned = String(raw)
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\b\d{5}\b/g, " ")
+    .replace(/\b\d{2,3}\b/g, " ")
+    .replace(/\bcedex\b/gi, " ")
+    .replace(/\barr(?:ondissement)?\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || undefined;
+}
+
 function extractStructuredListing(html: string, url: string): ImportedListing | null {
   if (!html) return null;
 
@@ -54,11 +67,12 @@ function extractStructuredListing(html: string, url: string): ImportedListing | 
     /"postalCode"\s*:\s*"(\d{5})"/i,
     /"codePostal"\s*:\s*"(\d{5})"/i,
   ]);
-  const ville = fromRegexStr(html, [
+  const villeRaw = fromRegexStr(html, [
     /"addressLocality"\s*:\s*"([^"]+)"/i,
     /"city"\s*:\s*"([^"]+)"/i,
     /"ville"\s*:\s*"([^"]+)"/i,
   ]);
+  const ville = sanitizeCity(villeRaw);
   const pieces = fromRegexNum(html, [
     /"numberOfRooms"\s*:\s*"?([\d.,\s]+)"?/i,
     /"rooms"\s*:\s*"?([\d.,\s]+)"?/i,
@@ -97,12 +111,13 @@ function extractHeuristic(text: string, url: string): ImportedListing {
   const title = text.split("\n").map((l) => l.trim()).find((l) => l.length > 8 && l.length < 140) || "Annonce importee";
   const host = new URL(url).hostname.replace(/^www\./, "");
 
+  const cityInlineMatch = text.match(/\b([A-Za-zÀ-ÖØ-öø-ÿ' -]{2,})\s+(?:\d{5}|\d{2,3})\b/);
   return {
     titre: title,
     prix: priceMatch ? toNumber(priceMatch[1]) || undefined : undefined,
     surface: surfaceMatch ? toNumber(surfaceMatch[1]) || undefined : undefined,
     codePostal: cpMatch ? cpMatch[0] : undefined,
-    ville: undefined,
+    ville: sanitizeCity(cityInlineMatch ? cityInlineMatch[1] : undefined),
     insee: inseeMatch ? inseeMatch[1] : undefined,
     typeLocal: /maison/i.test(text) ? "Maison" : "Appartement",
     description: text.slice(0, 1200),
@@ -208,7 +223,7 @@ ${markdown.slice(0, 8000)}
           prix: parsed.prix || structured?.prix,
           surface: parsed.surface || structured?.surface,
           codePostal: parsed.codePostal || structured?.codePostal,
-          ville: parsed.ville || structured?.ville,
+          ville: sanitizeCity(parsed.ville) || structured?.ville,
           insee: (parsed as ImportedListing).insee || structured?.insee,
           adresse: parsed.adresse || structured?.adresse,
           pieces: parsed.pieces || structured?.pieces,
@@ -231,7 +246,7 @@ ${markdown.slice(0, 8000)}
       prix: listing.prix || structured.prix,
       surface: listing.surface || structured.surface,
       codePostal: listing.codePostal || structured.codePostal,
-      ville: listing.ville || structured.ville,
+      ville: sanitizeCity(listing.ville) || structured.ville,
       insee: listing.insee || structured.insee,
       adresse: listing.adresse || structured.adresse,
       pieces: listing.pieces || structured.pieces,
