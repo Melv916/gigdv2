@@ -1,12 +1,7 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { ImportedListing } from "./types.ts";
 
 const FIRECRAWL_API = "https://api.firecrawl.dev/v1/scrape";
 const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-
-function dbClient() {
-  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-}
 
 function stripHtml(html: string): string {
   return html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
@@ -69,6 +64,15 @@ function extractStructuredListing(html: string, url: string): ImportedListing | 
     /"rooms"\s*:\s*"?([\d.,\s]+)"?/i,
     /"pieces"\s*:\s*"?([\d.,\s]+)"?/i,
   ]);
+  const insee = fromRegexStr(html, [
+    /"inseeCode"\s*:\s*"(\d{5})"/i,
+    /"codeInsee"\s*:\s*"(\d{5})"/i,
+    /"code_commune"\s*:\s*"(\d{5})"/i,
+  ]);
+  const adresse = fromRegexStr(html, [
+    /"streetAddress"\s*:\s*"([^"]+)"/i,
+    /"address"\s*:\s*"([^"]+)"/i,
+  ]);
 
   if (!price && !surface && !codePostal) return null;
   return {
@@ -78,15 +82,18 @@ function extractStructuredListing(html: string, url: string): ImportedListing | 
     pieces: pieces ? Math.round(pieces) : undefined,
     codePostal,
     ville,
+    insee,
+    adresse,
     typeLocal: /maison/i.test(html) ? "Maison" : "Appartement",
     vendeur: /agence|orpi|laforet|century|iad/i.test(new URL(url).hostname + " " + html) ? "agence" : "inconnu",
   };
 }
 
 function extractHeuristic(text: string, url: string): ImportedListing {
-  const priceMatch = text.match(/(\d[\d\s.,]{3,})\s?(€|eur|euro|euros)\b/i);
-  const surfaceMatch = text.match(/(\d{1,3}(?:[.,]\d{1,2})?)\s?m(?:2|²)\b/i);
+  const priceMatch = text.match(/(\d[\d\s.,]{3,})\s?(?:\u20AC|eur|euro|euros)\b/i);
+  const surfaceMatch = text.match(/(\d{1,3}(?:[.,]\d{1,2})?)\s?m(?:2|\u00B2)\b/i);
   const cpMatch = text.match(/\b\d{5}\b/);
+  const inseeMatch = text.match(/\b(?:insee|code\s*insee)\s*[:\-]?\s*(\d{5})\b/i);
   const title = text.split("\n").map((l) => l.trim()).find((l) => l.length > 8 && l.length < 140) || "Annonce importee";
   const host = new URL(url).hostname.replace(/^www\./, "");
 
@@ -96,6 +103,7 @@ function extractHeuristic(text: string, url: string): ImportedListing {
     surface: surfaceMatch ? toNumber(surfaceMatch[1]) || undefined : undefined,
     codePostal: cpMatch ? cpMatch[0] : undefined,
     ville: undefined,
+    insee: inseeMatch ? inseeMatch[1] : undefined,
     typeLocal: /maison/i.test(text) ? "Maison" : "Appartement",
     description: text.slice(0, 1200),
     vendeur: /agence|iad|orpi|laforet|century/i.test(host + " " + text) ? "agence" : "inconnu",
@@ -201,6 +209,8 @@ ${markdown.slice(0, 8000)}
           surface: parsed.surface || structured?.surface,
           codePostal: parsed.codePostal || structured?.codePostal,
           ville: parsed.ville || structured?.ville,
+          insee: (parsed as ImportedListing).insee || structured?.insee,
+          adresse: parsed.adresse || structured?.adresse,
           pieces: parsed.pieces || structured?.pieces,
           titre: parsed.titre || structured?.titre,
         };
@@ -222,41 +232,25 @@ ${markdown.slice(0, 8000)}
       surface: listing.surface || structured.surface,
       codePostal: listing.codePostal || structured.codePostal,
       ville: listing.ville || structured.ville,
+      insee: listing.insee || structured.insee,
+      adresse: listing.adresse || structured.adresse,
       pieces: listing.pieces || structured.pieces,
       titre: listing.titre || structured.titre,
     };
   }
-
-  const db = dbClient();
-  const { data: localDvf } = await db
-    .from("dvf_transactions")
-    .select("date_mutation,valeur_fonciere,surface_reelle_bati,type_local,nombre_pieces_principales")
-    .eq("code_postal", listing.codePostal || "")
-    .in("type_local", ["Appartement", "Maison"])
-    .gt("valeur_fonciere", 0)
-    .gt("surface_reelle_bati", 0)
-    .order("date_mutation", { ascending: false })
-    .limit(500);
-
-  const tx = localDvf || [];
-  const now = new Date();
-  const threeYearsAgo = new Date(now.getUTCFullYear() - 3, now.getUTCMonth(), now.getUTCDate());
-  const filtered = tx.filter((t: any) => new Date(t.date_mutation) >= threeYearsAgo);
-  const prices = filtered
-    .map((t: any) => Number(t.valeur_fonciere) / Number(t.surface_reelle_bati))
-    .filter((n: number) => Number.isFinite(n) && n > 0)
-    .sort((a: number, b: number) => a - b);
-  const median = prices.length ? prices[Math.floor(prices.length / 2)] : null;
-  const avg = prices.length ? prices.reduce((s: number, n: number) => s + n, 0) / prices.length : null;
+  console.log("[listingImport] property extracted", {
+    prix: listing?.prix ?? null,
+    surface: listing?.surface ?? null,
+    ville: listing?.ville ?? null,
+    codePostal: listing?.codePostal ?? null,
+    insee: (listing as ImportedListing | null)?.insee ?? null,
+  });
 
   return {
     canonicalUrl,
     listing,
-    dvfSummary: {
-      nbTransactions: filtered.length,
-      medianePrixM2: median ? Math.round(median) : null,
-      moyennePrixM2: avg ? Math.round(avg) : null,
-    },
+    dvfSummary: {},
   };
 }
+
 

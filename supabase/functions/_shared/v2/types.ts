@@ -21,6 +21,7 @@ export interface ImportedListing {
   adresse?: string;
   codePostal?: string;
   ville?: string;
+  insee?: string;
   dpe?: string | null;
   charges?: number | null;
   description?: string;

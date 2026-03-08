@@ -16,26 +16,12 @@ const db = createClient(supabaseUrl, supabaseKey);
 
 const provider: RentDataProvider = {
   async getParisEncadrement(input) {
-    if (!input.arrondissement_paris && !(input.insee?.startsWith("751"))) return null;
-    const arrondissement = input.arrondissement_paris ?? input.insee?.slice(3, 5);
-    if (!arrondissement) return null;
-
-    const pieces = input.pieces ?? 1;
-    const meuble = input.meuble ?? false;
-    const { data } = await db
-      .from("encadrement_paris")
-      .select("*")
-      .eq("arrondissement", arrondissement)
-      .eq("pieces", pieces)
-      .eq("meuble", meuble)
-      .order("year", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return data ?? null;
+    // Market references are restricted to city_market_prices only.
+    return null;
   },
 
   async getCommuneRent(insee) {
-    // Priority to aggregated city market table (updated from open-data migrations).
+    // Unique market source: city_market_prices.
     const { data: city } = await db
       .from("city_market_prices")
       .select("insee_code,departement_code,rent_m2_app_all,rent_m2_app_t1t2,rent_m2_app_t3plus,rent_m2_house")
@@ -52,19 +38,11 @@ const provider: RentDataProvider = {
         loyer_m2_cc_house: city.rent_m2_house,
       };
     }
-
-    const { data } = await db
-      .from("loyers_commune")
-      .select("*")
-      .eq("insee_code", insee)
-      .order("year", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return data ? { ...data, source_hint: "ANIL" as const } : null;
+    return null;
   },
 
   async getDepartmentFallback(departementCode, input) {
-    // Priority to aggregated city market table for department fallback.
+    // Department fallback remains constrained to city_market_prices.
     const { data: cityRows } = await db
       .from("city_market_prices")
       .select("rent_m2_app_all,rent_m2_app_t1t2,rent_m2_app_t3plus,rent_m2_house")
@@ -81,35 +59,11 @@ const provider: RentDataProvider = {
         .filter((n) => Number.isFinite(n) && n > 0);
       if (values.length > 0) return values.reduce((sum, n) => sum + n, 0) / values.length;
     }
-
-    let query = db.from("loyers_commune").select("*").eq("departement_code", departementCode);
-    query = (input.type ?? "apartment") === "house" ? query.not("loyer_m2_cc_house", "is", null) : query.not("loyer_m2_cc_app_all", "is", null);
-    const { data } = await query.limit(500);
-    if (!data || data.length === 0) return null;
-
-    const values = data
-      .map((row) => {
-        if ((input.type ?? "apartment") === "house") return Number(row.loyer_m2_cc_house ?? 0);
-        if ((input.typology ?? "all") === "t1t2") return Number(row.loyer_m2_cc_app_t1t2 ?? row.loyer_m2_cc_app_all ?? 0);
-        if ((input.typology ?? "all") === "t3plus") return Number(row.loyer_m2_cc_app_t3plus ?? row.loyer_m2_cc_app_all ?? 0);
-        return Number(row.loyer_m2_cc_app_all ?? 0);
-      })
-      .filter((n) => Number.isFinite(n) && n > 0);
-
-    if (values.length === 0) return null;
-    return values.reduce((sum, n) => sum + n, 0) / values.length;
+    return null;
   },
 
   async getOLLFallback(input) {
-    const typology = input.typology === "t1t2" ? "t1t2" : input.typology === "t3plus" ? "t3plus" : "all";
-    const { data } = await db
-      .from("loyers_oll")
-      .select("*")
-      .ilike("typologie", `%${typology}%`)
-      .order("year", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return data ?? null;
+    return null;
   },
 };
 

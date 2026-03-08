@@ -18,8 +18,8 @@ import {
   calcSeuilLoyerMinimum, calcProjections, type ProjectParams, type Projection,
 } from "@/lib/calculations";
 import { AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { createAnalysis, getMarketEnrichment, getMe, importAnalysisUrl } from "@/lib/v2/api";
-import { fetchRentEstimate } from "@/lib/investment/api";
+import { createAnalysis, getMe, importAnalysisUrl } from "@/lib/v2/api";
+import { buildMarketData, normalizePropertyData, type MarketData, type PropertyData } from "@/lib/market/cityMarketPipeline";
 import "./project-detail-cockpit.css";
 
 interface Project {
@@ -69,6 +69,17 @@ type CityMarketPriceRow = {
   rent_m2_app_t3plus: number | null;
   rent_m2_house: number | null;
   sale_m2_all: number | null;
+  prix_m2_moyen?: number | null;
+  loyer_m2_moyen?: number | null;
+  prix_m2_min_si_disponible?: number | null;
+  prix_m2_max_si_disponible?: number | null;
+  loyer_m2_min_si_disponible?: number | null;
+  loyer_m2_max_si_disponible?: number | null;
+  score_fiabilite?: number | null;
+  source_prix_m2?: string | null;
+  source_loyer_m2?: string | null;
+  date_reference_source?: string | null;
+  commentaire?: string | null;
 };
 
 const objectifLabels: Record<string, string> = { rp: "RP", locatif: "Locatif", marchand: "Marchand" };
@@ -207,32 +218,39 @@ function pickRentM2(
 async function fetchCityMarketReference(args: {
   insee?: string;
   ville?: string;
+  postalCode?: string;
   departementCode?: string;
 }): Promise<CityMarketPriceRow | null> {
   const insee = String(args.insee || "").trim();
   const ville = String(args.ville || "").trim();
+  const postalCode = String(args.postalCode || "").trim();
   const departementCode = String(args.departementCode || "").trim();
 
   if (insee) {
     const { data } = await supabase
       .from("city_market_prices")
-      .select("insee_code,commune,departement_code,rent_m2_app_all,rent_m2_app_t1t2,rent_m2_app_t3plus,rent_m2_house,sale_m2_all")
+      .select("*")
       .eq("insee_code", insee)
       .maybeSingle();
     if (data) return data as CityMarketPriceRow;
   }
 
-  if (ville && departementCode) {
-    const { data } = await supabase
+  if (ville) {
+    let query = supabase
       .from("city_market_prices")
-      .select("insee_code,commune,departement_code,rent_m2_app_all,rent_m2_app_t1t2,rent_m2_app_t3plus,rent_m2_house,sale_m2_all")
-      .eq("departement_code", departementCode)
+      .select("*")
       .ilike("commune", ville)
-      .limit(10);
+      .limit(25);
+    if (departementCode) query = query.eq("departement_code", departementCode);
+    const { data } = await query;
     if (data && data.length > 0) {
       const expected = normalizeCity(ville);
       const exact = data.find((r: any) => normalizeCity(String(r.commune || "")) === expected);
-      return (exact || data[0]) as CityMarketPriceRow;
+      const selected = (exact || data[0]) as CityMarketPriceRow;
+      if (postalCode && selected?.departement_code && !postalCode.startsWith(String(selected.departement_code))) {
+        return null;
+      }
+      return selected;
     }
   }
 
@@ -269,9 +287,8 @@ const ProjectDetail = () => {
   const [cacheHit, setCacheHit] = useState(false);
   const [iaMode, setIaMode] = useState<"courte" | "complete">("courte");
   const [marketStatus, setMarketStatus] = useState<"ok" | "processing" | "failed" | "indisponible">("indisponible");
-  const [marketEnrichment, setMarketEnrichment] = useState<any>(null);
-  const [marketSources, setMarketSources] = useState<any[]>([]);
-  const [marketAnalysisId, setMarketAnalysisId] = useState<string | null>(null);
+  const [marketData, setMarketData] = useState<MarketData | null>(null);
+  const [propertyData, setPropertyData] = useState<PropertyData | null>(null);
 
   // Projections
   const [projections, setProjections] = useState<Projection[]>([]);
@@ -295,34 +312,6 @@ const ProjectDetail = () => {
         setLoading(false);
       });
   }, [user, id]);
-
-  useEffect(() => {
-    if (!marketAnalysisId || marketStatus !== "processing") return;
-    let cancelled = false;
-    let tries = 0;
-
-    const poll = async () => {
-      if (cancelled) return;
-      tries += 1;
-      try {
-        const data = await getMarketEnrichment(marketAnalysisId);
-        if (cancelled) return;
-        setMarketStatus(data?.status || "indisponible");
-        setMarketEnrichment(data?.enrichment || null);
-        setMarketSources(Array.isArray(data?.sources) ? data.sources : []);
-        if (data?.status === "processing" && tries < 12) {
-          setTimeout(poll, 1500);
-        }
-      } catch {
-        if (!cancelled && tries < 12) setTimeout(poll, 1800);
-      }
-    };
-
-    poll();
-    return () => {
-      cancelled = true;
-    };
-  }, [marketAnalysisId, marketStatus]);
 
   useEffect(() => {
     if (!user) return;
@@ -373,37 +362,41 @@ const ProjectDetail = () => {
     setV2AnalysisText("");
     setCacheHit(false);
     setMarketStatus("indisponible");
-    setMarketEnrichment(null);
-    setMarketSources([]);
-    setMarketAnalysisId(null);
+    setMarketData(null);
+    setPropertyData(null);
     setListing(null);
     setProjections([]);
 
     try {
       let listingData: any = null;
-      let dvfSummary: any = null;
+      let marketSummary: any = null;
       let prix = manualPrix;
       let surface = manualSurface;
       let cityMarketRef: CityMarketPriceRow | null = null;
+      let normalizedProperty: PropertyData | null = null;
 
       if (url) {
         try {
           const imported = await importAnalysisUrl(url);
           listingData = imported?.listing || null;
-          dvfSummary = imported?.dvfSummary || null;
+          marketSummary = imported?.dvfSummary || null;
         } catch {
           listingData = null;
-          dvfSummary = null;
+          marketSummary = null;
         }
-
-        prix = readNum(listingData?.prix) || prix;
-        surface = readNum(listingData?.surface) || surface;
         if (listingData) {
+          normalizedProperty = normalizePropertyData(listingData as Record<string, unknown>);
+          prix = normalizedProperty.purchasePrice || prix;
+          surface = normalizedProperty.surface || surface;
           listingData = {
             ...listingData,
-            prix: readNum(listingData?.prix) || listingData?.prix,
-            surface: readNum(listingData?.surface) || listingData?.surface,
+            prix: normalizedProperty.purchasePrice || readNum(listingData?.prix) || listingData?.prix,
+            surface: normalizedProperty.surface || readNum(listingData?.surface) || listingData?.surface,
             pieces: readNum(listingData?.pieces) || listingData?.pieces,
+            ville: normalizedProperty.city || listingData?.ville,
+            codePostal: normalizedProperty.postalCode || listingData?.codePostal,
+            insee: normalizedProperty.inseeCode || listingData?.insee,
+            adresse: normalizedProperty.address || listingData?.adresse,
           };
           setListing(listingData);
         }
@@ -419,13 +412,46 @@ const ProjectDetail = () => {
       cityMarketRef = await fetchCityMarketReference({
         insee: String((listingData as any)?.insee || "").trim(),
         ville: String(listingData?.ville || "").trim(),
+        postalCode: listingCodePostal,
         departementCode: listingDepartementCode,
       });
+      console.log("[analysis] city_market_prices lookup", {
+        insee: String((listingData as any)?.insee || "").trim() || null,
+        ville: String(listingData?.ville || "").trim() || null,
+        postalCode: listingCodePostal || null,
+        departementCode: listingDepartementCode || null,
+        found: Boolean(cityMarketRef),
+      });
 
-      // Sale m2 reference from city_market_prices (your city table) in priority.
-      if (Number(cityMarketRef?.sale_m2_all || 0) > 0) {
-        dvfSummary = { ...(dvfSummary || {}), medianePrixM2: Number(cityMarketRef?.sale_m2_all) };
+      if (!normalizedProperty) {
+        normalizedProperty = normalizePropertyData({
+          prix,
+          surface,
+          ville: listingData?.ville || null,
+          codePostal: listingCodePostal || null,
+          insee: (listingData as any)?.insee || null,
+          adresse: listingData?.adresse || null,
+          pieces: listingData?.pieces || null,
+        });
       }
+
+      const type = /maison/i.test(String(listingData?.typeLocal || "")) ? "house" : "apartment";
+      const typology = inferTypology(Number(surface), Number(listingData?.pieces || 0) || undefined);
+      const normalizedMarket = buildMarketData(cityMarketRef as Record<string, unknown> | null, { type, typology });
+      setPropertyData(normalizedProperty);
+      setMarketData(normalizedMarket);
+      setMarketStatus(cityMarketRef ? "ok" : "indisponible");
+      marketSummary = {
+        ...(marketSummary || {}),
+        marketPricePerSqm: normalizedMarket.marketPricePerSqm,
+        marketRentPerSqm: normalizedMarket.marketRentPerSqm,
+        scoreFiabilite: normalizedMarket.scoreFiabilite,
+        sourcePrixM2: normalizedMarket.sourcePrixM2,
+        sourceLoyerM2: normalizedMarket.sourceLoyerM2,
+      };
+
+      console.log("[analysis] property data (SeLoger)", normalizedProperty);
+      console.log("[analysis] market data (city_market_prices)", normalizedMarket);
 
       if (!prix || !surface) {
         toast({ title: "Données requises", description: "Renseignez le prix et la surface.", variant: "destructive" });
@@ -452,46 +478,11 @@ const ProjectDetail = () => {
 
       let loyerPourCalc = loyerEstime || 0;
       if (!loyerPourCalc && surface > 0) {
-        const type = /maison/i.test(String(listingData?.typeLocal || "")) ? "house" : "apartment";
-        const typology = inferTypology(Number(surface), Number(listingData?.pieces || 0) || undefined);
-        const rentM2FromCityTable = pickRentM2(cityMarketRef, type, typology);
+        const rentM2FromCityTable = normalizedMarket.marketRentPerSqm || pickRentM2(cityMarketRef, type, typology);
         if (rentM2FromCityTable > 0) {
           loyerPourCalc = Math.round(rentM2FromCityTable * Number(surface));
           setLoyerEstime(loyerPourCalc);
         }
-      }
-      if (!loyerPourCalc && surface > 0) {
-        try {
-          const codePostal = String(listingData?.codePostal || manualCP || "").trim();
-          const departementCode =
-            codePostal.length >= 2
-              ? codePostal.startsWith("97") && codePostal.length >= 3
-                ? codePostal.slice(0, 3)
-                : codePostal.slice(0, 2)
-              : undefined;
-          const insee = String((listingData as any)?.insee || "").trim() || undefined;
-          const type = /maison/i.test(String(listingData?.typeLocal || "")) ? "house" : "apartment";
-          const typology = inferTypology(Number(surface), Number(listingData?.pieces || 0) || undefined);
-          const rent = await fetchRentEstimate({
-            insee,
-            departement_code: departementCode,
-            type,
-            typology,
-            surface: Number(surface),
-          });
-          const estimate = Number((rent as any)?.loyer_total_estime || 0);
-          if (Number.isFinite(estimate) && estimate > 0) {
-            loyerPourCalc = Math.round(estimate);
-            setLoyerEstime(loyerPourCalc);
-          }
-        } catch {
-          // Keep manual/default value if no rent estimate is available.
-        }
-      }
-      if (!loyerPourCalc && prix > 0) {
-        // Last-resort fallback to avoid null economics when open-data is unavailable.
-        loyerPourCalc = Math.round((prix * 0.055) / 12);
-        setLoyerEstime(loyerPourCalc);
       }
 
       const fallbackAnalysis = buildFallbackAnalysisResult({
@@ -500,7 +491,7 @@ const ProjectDetail = () => {
         loyerMensuel: loyerPourCalc,
         mensualiteTotale: mensualiteTotaleLocal,
         coutGlobal: coutGlobalLocal,
-        dvfMedian: Number(dvfSummary?.medianePrixM2 || 0) || null,
+        dvfMedian: Number(normalizedMarket.marketPricePerSqm || 0) || null,
         vacanceLocativeMois: params.vacance_locative,
         chargesMensuelles,
         chargesNonRecup: params.charges_non_recup,
@@ -543,17 +534,11 @@ const ProjectDetail = () => {
               vendeur: "inconnu",
               typeLocal: "Appartement",
             },
-            dvfSummary: dvfSummary || {},
+            dvfSummary: marketSummary || {},
           },
         });
         setV2AnalysisText(String(v2?.analysis?.analysis_text || ""));
         setCacheHit(Boolean(v2?.cacheHit));
-        if (v2?.analysis?.id) setMarketAnalysisId(String(v2.analysis.id));
-        if (v2?.market) {
-          setMarketStatus(v2.market.status || "indisponible");
-          setMarketEnrichment(v2.market.enrichment || null);
-          setMarketSources(Array.isArray(v2.market.sources) ? v2.market.sources : []);
-        }
       } catch {
         // Keep V1 result available even if V2 synthesis fails.
       }
@@ -561,6 +546,17 @@ const ProjectDetail = () => {
       // Calculate projections locally
       const projs = calcProjections(params, prix, loyerPourCalc, chargesMensuelles, taxeFonciere, travaux, autresCouts);
       setProjections(projs);
+      console.log("[analysis] final payload for calculation", {
+        propertyData: normalizedProperty,
+        marketData: normalizedMarket,
+        calcInputs: {
+          prix,
+          surface,
+          loyerPourCalc,
+          mensualiteTotaleLocal,
+          coutGlobalLocal,
+        },
+      });
 
       // Save analysis to database
       if (user && project) {
@@ -583,7 +579,7 @@ const ProjectDetail = () => {
           occupation_cible: occupationCible || null,
           autres_couts: autresCouts,
           listing_data: listingData,
-          dvf_summary: dvfSummary,
+          dvf_summary: marketSummary,
           analysis_result: fallbackAnalysis,
         };
         const { data: saved } = await supabase.from("project_analyses").insert(analysisRecord).select().single();
@@ -673,22 +669,19 @@ const ProjectDetail = () => {
   const coutGlobalPrixCible = prixCibleRendement8 > 0 ? calcCoutGlobal(prixCibleRendement8, fraisNotairePrixCible, travaux, autresCouts) : 0;
   const rendementAbove10 = rendementBrutCalc > 10;
   const projectionBase = basePrixRendement > 0 ? basePrixRendement : 0;
-  const dvfMedianEnriched = Number(marketEnrichment?.dvf?.median_eur_m2 || 0);
-  const dvfComparables = Number(marketEnrichment?.dvf?.samples_count || 0);
-  const dvfPeriod = String(marketEnrichment?.dvf?.period || "n/a");
-  const dvfScope = String(marketEnrichment?.scope || "n/a");
-  const marketReason = String(marketEnrichment?.reason || "").trim();
+  const marketPriceRef = Number(marketData?.marketPricePerSqm || 0);
+  const marketRentRef = Number(marketData?.marketRentPerSqm || 0);
   const displayedDvf =
-    dvfMedianEnriched > 0
-      ? `${Math.round(dvfMedianEnriched).toLocaleString("fr-FR")}€/m²`
+    marketPriceRef > 0
+      ? `${Math.round(marketPriceRef).toLocaleString("fr-FR")}€/m²`
       : aiResult?.prixM2Dvf || "n/a";
-  const marketSourceLine = marketSources.length > 0
-    ? `Source: data.gouv.fr (${marketSources[0]?.dataset_id || "n/a"}/${marketSources[0]?.resource_id || "n/a"})`
+  const marketSourceLine = marketData?.sourcePrixM2 || marketData?.sourceLoyerM2
+    ? `Source prix: ${marketData?.sourcePrixM2 || "n/a"} · Source loyer: ${marketData?.sourceLoyerM2 || "n/a"}`
     : null;
   const cashFlowMensuelNum = aiResult ? Number(String(aiResult.cashFlow || "0").replace(/[^0-9.-]/g, "")) : 0;
   const priceM2Annonce = activePrix > 0 && activeSurface > 0 ? activePrix / activeSurface : 0;
-  const dvfMedianRef = dvfMedianEnriched > 0
-    ? dvfMedianEnriched
+  const dvfMedianRef = marketPriceRef > 0
+    ? marketPriceRef
     : Number(String(aiResult?.prixM2Dvf || "0").replace(/[^0-9.-]/g, ""));
   const pointsFortsDecision: { point: string; impact: string }[] = [];
   const pointsFaiblesDecision: { flag: string; impact: string }[] = [];
@@ -1114,7 +1107,7 @@ const ProjectDetail = () => {
                   </div>
                 )}
 
-                {/* 5) Marché/DVF + Données clés + points intégrés */}
+                {/* 5) Marché + Données clés + points intégrés */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                   <div className="analysis-cockpit-subcard p-5">
                     <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
@@ -1133,8 +1126,8 @@ const ProjectDetail = () => {
                     </div>
                     <div className="space-y-2">
                       {[
-                        { icon: MapPin, label: "Médiane DVF quartier", value: displayedDvf },
-                        { icon: TrendingUp, label: "Loyer estimé", value: aiResult.loyerEstime },
+                        { icon: MapPin, label: "Prix moyen marché (ville)", value: displayedDvf },
+                        { icon: TrendingUp, label: "Loyer marché (m²)", value: marketRentRef > 0 ? `${Math.round(marketRentRef).toLocaleString("fr-FR")}€/m²` : "n/a" },
                         { icon: FileText, label: "Cash-flow mensuel", value: aiResult.cashFlow },
                       ].map((m) => (
                         <div key={m.label} className="analysis-line-item">
@@ -1146,23 +1139,13 @@ const ProjectDetail = () => {
                         </div>
                       ))}
                     </div>
-                    {dvfComparables > 0 && (
-                      <p className="text-[11px] text-muted-foreground mt-3">
-                        {dvfComparables} comparables · {dvfPeriod} · échelle {dvfScope}
-                      </p>
-                    )}
                     {marketSourceLine && (
                       <p className="text-[10px] text-muted-foreground mt-1">
                         {marketSourceLine}
                       </p>
                     )}
-                    {marketStatus !== "ok" && marketReason && (
-                      <p className="text-[10px] text-amber-300 mt-1">
-                        Raison: {marketReason}
-                      </p>
-                    )}
                     <p className="text-[10px] text-muted-foreground mt-3 border border-border/40 rounded-full inline-flex px-2 py-0.5">
-                      Hypothèses v0.1 · DVF + IA
+                      Hypothèses v0.1 · city_market_prices
                     </p>
                   </div>
                   <div className="analysis-cockpit-subcard p-5">

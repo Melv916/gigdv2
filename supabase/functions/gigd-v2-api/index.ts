@@ -4,11 +4,6 @@ import { canonicalizeUrl } from "../_shared/v2/cacheService.ts";
 import { generateAnalysisWithCache } from "../_shared/v2/aiService.ts";
 import { importListingFromUrl } from "../_shared/v2/listingImportService.ts";
 import {
-  enrichMarketForAnalysis,
-  getMarketEnrichmentStatus,
-  processQueuedMarketJobs,
-} from "../_shared/v2/marketEnrichmentService.ts";
-import {
   allowedIAModeForPlan,
   getUsageForPeriod,
   incrementUsage,
@@ -179,13 +174,7 @@ serve(async (req) => {
 
     // Worker endpoint authenticated by shared secret (no user JWT required)
     if (req.method === "POST" && route === "/api/market/enrich/worker/run") {
-      const workerSecret = Deno.env.get("MARKET_WORKER_SECRET") || "";
-      const incoming = req.headers.get("x-worker-secret") || "";
-      if (!workerSecret || incoming !== workerSecret) {
-        return json(403, { error: "Forbidden" });
-      }
-      const run = await processQueuedMarketJobs({ db, maxJobs: 10 });
-      return json(200, { ok: true, ...run });
+      return json(200, { ok: true, skipped: true, reason: "disabled_market_enrichment" });
     }
 
     const user = await getUser(req);
@@ -309,14 +298,7 @@ serve(async (req) => {
         .select("*")
         .single();
 
-      const market = analysis
-        ? await enrichMarketForAnalysis({
-            db,
-            analysisId: analysis.id,
-            userId: user.id,
-            maxSyncMs: 450,
-          })
-        : { status: "indisponible" as const, enrichment: null, sources: [] };
+      const market = { status: "indisponible" as const, enrichment: null, sources: [] };
 
       await incrementUsage(db, user.id, periodKey);
 
@@ -329,29 +311,11 @@ serve(async (req) => {
     }
 
     if (req.method === "POST" && route === "/api/market/enrich") {
-      const body = await req.json().catch(() => ({}));
-      const analysisId = String(body.analysisId || "");
-      if (!analysisId) return json(400, { error: "analysisId is required" });
-
-      const force = Boolean(body.force || false);
-      const result = await enrichMarketForAnalysis({
-        db,
-        analysisId,
-        userId: user.id,
-        force,
-        maxSyncMs: 450,
-      });
-      return json(200, result);
+      return json(200, { status: "indisponible", enrichment: null, sources: [] });
     }
 
     if (req.method === "GET" && route.startsWith("/api/market/enrich/")) {
-      const analysisId = route.replace("/api/market/enrich/", "");
-      const result = await getMarketEnrichmentStatus({
-        db,
-        analysisId,
-        userId: user.id,
-      });
-      return json(200, result);
+      return json(200, { status: "indisponible", enrichment: null, sources: [] });
     }
 
     if (req.method === "GET" && route.startsWith("/api/analysis/")) {
