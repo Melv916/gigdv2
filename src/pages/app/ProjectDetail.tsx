@@ -234,6 +234,27 @@ function cityLookupCandidates(value: string): string[] {
   return Array.from(new Set([cleaned, ...parts]));
 }
 
+function parseSelogerLocationFromUrl(rawUrl: string): { city: string | null; departementCode: string | null } {
+  try {
+    const u = new URL(rawUrl);
+    const parts = u.pathname.split("/").filter(Boolean);
+    const slug = parts.find((p) => /-\d{2,3}$/.test(p)) || null;
+    if (!slug) return { city: null, departementCode: null };
+    const m = slug.match(/^(.*)-(\d{2,3})$/);
+    if (!m) return { city: null, departementCode: null };
+    const citySlug = m[1] || "";
+    const dept = m[2] || null;
+    const city = citySlug
+      .split("-")
+      .filter(Boolean)
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+      .join(" ");
+    return { city: city || null, departementCode: dept };
+  } catch {
+    return { city: null, departementCode: null };
+  }
+}
+
 function pickRentM2(
   row: CityMarketPriceRow | null,
   type: "house" | "apartment",
@@ -436,6 +457,7 @@ const ProjectDetail = () => {
         }
         if (listingData) {
           normalizedProperty = normalizePropertyData(listingData as Record<string, unknown>);
+          const inferredFromUrl = parseSelogerLocationFromUrl(url);
           prix = normalizedProperty.purchasePrice || prix;
           surface = normalizedProperty.surface || surface;
           listingData = {
@@ -443,25 +465,30 @@ const ProjectDetail = () => {
             prix: normalizedProperty.purchasePrice || readNum(listingData?.prix) || listingData?.prix,
             surface: normalizedProperty.surface || readNum(listingData?.surface) || listingData?.surface,
             pieces: readNum(listingData?.pieces) || listingData?.pieces,
-            ville: normalizedProperty.city || listingData?.ville,
+            ville: normalizedProperty.city || listingData?.ville || inferredFromUrl.city,
             codePostal: normalizedProperty.postalCode || listingData?.codePostal,
             insee: normalizedProperty.inseeCode || listingData?.insee,
             adresse: normalizedProperty.address || listingData?.adresse,
+            departementCode: (listingData as any)?.departementCode || inferredFromUrl.departementCode || null,
           };
           setListing(listingData);
         }
       }
 
       const listingCodePostal = normalizePostalCode(String(listingData?.codePostal || manualCP || "").trim());
+      const inferredFromUrl = parseSelogerLocationFromUrl(url);
+      const inseeForDept = normalizeInsee(String((listingData as any)?.insee || "").trim());
       const listingDepartementCode =
         listingCodePostal.length >= 2
           ? listingCodePostal.startsWith("97") && listingCodePostal.length >= 3
             ? listingCodePostal.slice(0, 3)
             : listingCodePostal.slice(0, 2)
-          : "";
+          : inseeForDept
+            ? (/^97\d/.test(inseeForDept) ? inseeForDept.slice(0, 3) : inseeForDept.slice(0, 2))
+            : String((listingData as any)?.departementCode || inferredFromUrl.departementCode || "").trim();
       cityMarketRef = await fetchCityMarketReference({
         insee: String((listingData as any)?.insee || "").trim(),
-        ville: String(listingData?.ville || "").trim(),
+        ville: String(listingData?.ville || inferredFromUrl.city || "").trim(),
         postalCode: listingCodePostal,
         departementCode: listingDepartementCode,
       });
