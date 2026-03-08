@@ -216,11 +216,22 @@ function normalizePostalCode(value: string): string {
 }
 
 function cleanCityForLookup(value: string): string {
-  return String(value || "")
+  const v = String(value || "")
     .replace(/\([^)]*\)/g, " ")
     .replace(/\b\d{5}\b/g, " ")
+    .replace(/\b\d+(?:er|e|eme)?\s*arr(?:ondissement)?\b/gi, " ")
+    .replace(/\barr(?:ondissement)?\b/gi, " ")
+    .replace(/\bcedex\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+  return v;
+}
+
+function cityLookupCandidates(value: string): string[] {
+  const cleaned = cleanCityForLookup(value);
+  if (!cleaned) return [];
+  const parts = cleaned.split(/[-/]/).map((p) => p.trim()).filter(Boolean);
+  return Array.from(new Set([cleaned, ...parts]));
 }
 
 function pickRentM2(
@@ -243,6 +254,7 @@ async function fetchCityMarketReference(args: {
 }): Promise<CityMarketPriceRow | null> {
   const insee = normalizeInsee(String(args.insee || "").trim());
   const ville = cleanCityForLookup(String(args.ville || "").trim());
+  const cityCandidates = cityLookupCandidates(ville);
   const postalCode = normalizePostalCode(String(args.postalCode || "").trim());
   const departementCode = String(args.departementCode || "").trim();
 
@@ -255,33 +267,36 @@ async function fetchCityMarketReference(args: {
     if (data) return data as CityMarketPriceRow;
   }
 
-  if (ville || departementCode) {
+  if (cityCandidates.length > 0 || departementCode) {
     let query = supabase
       .from("city_market_prices")
       .select("*");
     if (departementCode) {
       query = query.eq("departement_code", departementCode).limit(5000);
-    } else if (ville) {
-      query = query.ilike("commune", `%${ville}%`).limit(200);
+    } else if (cityCandidates.length > 0) {
+      query = query.limit(5000);
     } else {
       query = query.limit(200);
     }
 
     const { data } = await query;
     if (data && data.length > 0) {
-      const expected = normalizeCity(ville);
+      const expectedList = cityCandidates.map((c) => normalizeCity(c)).filter(Boolean);
       const ranked = data
         .map((r: any) => {
           const communeNorm = normalizeCity(String(r.commune || ""));
           let score = 0;
-          if (expected && communeNorm === expected) score += 100;
-          else if (expected && communeNorm.startsWith(expected)) score += 70;
-          else if (expected && communeNorm.includes(expected)) score += 50;
+          for (const expected of expectedList) {
+            if (expected && communeNorm === expected) score = Math.max(score, 100);
+            else if (expected && communeNorm.startsWith(expected)) score = Math.max(score, 70);
+            else if (expected && communeNorm.includes(expected)) score = Math.max(score, 50);
+          }
           if (postalCode && r.departement_code && postalCode.startsWith(String(r.departement_code))) score += 20;
           if (Number(r.rent_m2_app_all || r.loyer_m2_moyen || 0) > 0) score += 10;
           if (Number(r.sale_m2_all || r.prix_m2_moyen || 0) > 0) score += 10;
           return { row: r as CityMarketPriceRow, score };
         })
+        .filter((x) => x.score > 0)
         .sort((a, b) => b.score - a.score);
 
       const selected = ranked[0]?.row || null;
@@ -489,7 +504,14 @@ const ProjectDetail = () => {
       console.log("[analysis] market data (city_market_prices)", normalizedMarket);
 
       if (!prix || !surface) {
-        toast({ title: "Données requises", description: "Renseignez le prix et la surface.", variant: "destructive" });
+        const hasUrl = Boolean(url);
+        toast({
+          title: hasUrl ? "Extraction annonce bloquee" : "Données requises",
+          description: hasUrl
+            ? "SeLoger bloque la lecture serveur (anti-bot). Active Firecrawl cote Supabase ou saisis prix/surface manuellement."
+            : "Renseignez le prix et la surface.",
+          variant: "destructive",
+        });
         setAnalysisStep("idle");
         return;
       }
@@ -518,6 +540,15 @@ const ProjectDetail = () => {
           loyerPourCalc = Math.round(rentM2FromCityTable * Number(surface));
           setLoyerEstime(loyerPourCalc);
         }
+      }
+      if (!loyerPourCalc) {
+        toast({
+          title: "Loyer requis",
+          description: "Loyer marche introuvable pour cette annonce. Renseigne un loyer estime pour lancer les calculs.",
+          variant: "destructive",
+        });
+        setAnalysisStep("idle");
+        return;
       }
 
       const fallbackAnalysis = buildFallbackAnalysisResult({
