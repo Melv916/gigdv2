@@ -125,12 +125,31 @@ function extractHeuristic(text: string, url: string): ImportedListing {
   };
 }
 
+function extractSurfaceFromText(text: string): number | undefined {
+  const candidates: number[] = [];
+  const patterns = [
+    /(surface(?:\s+habitable)?|superficie)[^\d]{0,24}(\d{1,3}(?:[.,]\d{1,2})?)\s?m(?:2|\u00B2)/gi,
+    /(\d{1,3}(?:[.,]\d{1,2})?)\s?m(?:2|\u00B2)/gi,
+  ];
+  for (const p of patterns) {
+    let m: RegExpExecArray | null;
+    while ((m = p.exec(text)) !== null) {
+      const numRaw = m[2] || m[1];
+      const n = toNumber(numRaw || "");
+      if (n && n >= 8 && n <= 400) candidates.push(n);
+    }
+  }
+  if (!candidates.length) return undefined;
+  return candidates[0];
+}
+
 function fillMissingFromText(listing: ImportedListing, text: string, url: string): ImportedListing {
   const h = extractHeuristic(text, url);
+  const surfaceFromText = extractSurfaceFromText(text);
   return {
     ...listing,
     prix: listing.prix || h.prix,
-    surface: listing.surface || h.surface,
+    surface: listing.surface || h.surface || surfaceFromText,
     codePostal: listing.codePostal || h.codePostal,
     ville: listing.ville || h.ville,
     typeLocal: listing.typeLocal || h.typeLocal,
