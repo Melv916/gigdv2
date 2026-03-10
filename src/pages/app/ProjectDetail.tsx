@@ -570,13 +570,13 @@ const ProjectDetail = () => {
         }
       }
       if (!loyerPourCalc) {
+        // Keep analysis running with a conservative temporary estimate when market rent is unavailable.
+        loyerPourCalc = Math.round((prix * 0.055) / 12);
+        setLoyerEstime(loyerPourCalc);
         toast({
-          title: "Loyer requis",
-          description: "Loyer marche introuvable pour cette annonce. Renseigne un loyer estime pour lancer les calculs.",
-          variant: "destructive",
+          title: "Loyer marche indisponible",
+          description: "Analyse poursuivie avec une estimation provisoire. Tu peux ajuster le loyer manuellement.",
         });
-        setAnalysisStep("idle");
-        return;
       }
 
       const fallbackAnalysis = buildFallbackAnalysisResult({
