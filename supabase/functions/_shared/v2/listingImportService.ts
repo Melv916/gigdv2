@@ -104,7 +104,7 @@ function extractStructuredListing(html: string, url: string): ImportedListing | 
 }
 
 function extractHeuristic(text: string, url: string): ImportedListing {
-  const priceMatch = text.match(/(\d[\d\s.,]{3,})\s?(?:\u20AC|eur|euro|euros)\b/i);
+  const priceMatch = text.match(/((?:\d{1,3}(?:[\s\u00A0]\d{3})+)|\d{5,8})(?:\s?(?:\u20AC|eur|euro|euros))\b/i);
   const surfaceMatch = text.match(/(\d{1,3}(?:[.,]\d{1,2})?)\s?m(?:2|\u00B2)\b/i);
   const cpMatch = text.match(/\b\d{5}\b/);
   const inseeMatch = text.match(/\b(?:insee|code\s*insee)\s*[:\-]?\s*(\d{5})\b/i);
@@ -131,6 +131,7 @@ export async function importListingFromUrl(url: string): Promise<{
   dvfSummary: Record<string, unknown>;
 }> {
   const parsed = new URL(url);
+  const isSeloger = /(^|\.)seloger\.com$/i.test(parsed.hostname);
   parsed.hash = "";
   parsed.searchParams.sort();
   const canonicalUrl = parsed.toString();
@@ -138,6 +139,7 @@ export async function importListingFromUrl(url: string): Promise<{
   const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
   let markdown = "";
   let rawHtml = "";
+  let firecrawlError: string | null = null;
   if (firecrawlKey) {
     const scrapeRes = await fetch(FIRECRAWL_API, {
       method: "POST",
@@ -155,15 +157,24 @@ export async function importListingFromUrl(url: string): Promise<{
     if (scrapeRes.ok) {
       const scrapeData = await scrapeRes.json();
       markdown = String(scrapeData.data?.markdown || scrapeData.markdown || "");
+    } else {
+      const errTxt = await scrapeRes.text().catch(() => "");
+      firecrawlError = `Firecrawl ${scrapeRes.status}${errTxt ? `: ${errTxt.slice(0, 200)}` : ""}`;
     }
+  } else if (isSeloger) {
+    throw new Error("FIRECRAWL_API_KEY manquante pour importer SeLoger");
   }
 
   const pageRes = await fetch(canonicalUrl, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; GIGD/2.0)" },
   });
   rawHtml = pageRes.ok ? await pageRes.text() : "";
+  const antiBotDetected =
+    /Please enable JS and disable any ad blocker/i.test(rawHtml) ||
+    /captcha-delivery\.com/i.test(rawHtml) ||
+    /cf-chl-bypass/i.test(rawHtml);
 
-  if (!markdown || markdown.length < 60) {
+  if ((!markdown || markdown.length < 60) && !isSeloger) {
     const pageRes = await fetch(canonicalUrl, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; GIGD/2.0)" },
     });
@@ -173,6 +184,13 @@ export async function importListingFromUrl(url: string): Promise<{
   }
 
   const structured = extractStructuredListing(rawHtml, canonicalUrl);
+  if (isSeloger && (!markdown || markdown.length < 60) && antiBotDetected) {
+    throw new Error(
+      firecrawlError
+        ? `Import SeLoger bloque: ${firecrawlError}`
+        : "Import SeLoger bloque (anti-bot). Vérifie FIRECRAWL_API_KEY côté Supabase."
+    );
+  }
   if ((!markdown || markdown.length < 60) && !structured) {
     return { canonicalUrl, listing: { titre: "Annonce importee", vendeur: "inconnu" }, dvfSummary: {} };
   }

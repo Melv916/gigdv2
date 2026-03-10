@@ -256,6 +256,26 @@ function parseSelogerLocationFromUrl(rawUrl: string): { city: string | null; dep
   }
 }
 
+function parseSelogerHintsFromUrl(rawUrl: string): { priceHint: number | null; surfaceHint: number | null } {
+  try {
+    const u = new URL(rawUrl);
+    const directPrice = Number(u.searchParams.get("price") || 0);
+    const directSurface = Number(u.searchParams.get("surface") || 0);
+    const encodedSearch = u.searchParams.get("search") || "";
+    const decoded = decodeURIComponent(encodedSearch);
+    const mPriceMax = decoded.match(/(?:^|&)priceMax=(\d+)/i);
+    const mSpaceMin = decoded.match(/(?:^|&)spaceMin=(\d+(?:[.,]\d+)?)/i);
+    const hintPrice = directPrice > 0 ? directPrice : mPriceMax ? Number(mPriceMax[1]) : 0;
+    const hintSurface = directSurface > 0 ? directSurface : mSpaceMin ? Number(String(mSpaceMin[1]).replace(",", ".")) : 0;
+    return {
+      priceHint: Number.isFinite(hintPrice) && hintPrice > 0 ? hintPrice : null,
+      surfaceHint: Number.isFinite(hintSurface) && hintSurface > 0 ? hintSurface : null,
+    };
+  } catch {
+    return { priceHint: null, surfaceHint: null };
+  }
+}
+
 function pickRentM2(
   row: CityMarketPriceRow | null,
   type: "house" | "apartment",
@@ -442,19 +462,22 @@ const ProjectDetail = () => {
     try {
       let listingData: any = null;
       let marketSummary: any = null;
+      let importErrorMessage: string | null = null;
       let prix = manualPrix;
       let surface = manualSurface;
       let cityMarketRef: CityMarketPriceRow | null = null;
       let normalizedProperty: PropertyData | null = null;
+      const urlHints = parseSelogerHintsFromUrl(url);
 
       if (url) {
         try {
           const imported = await importAnalysisUrl(url);
           listingData = imported?.listing || null;
           marketSummary = imported?.dvfSummary || null;
-        } catch {
+        } catch (e: any) {
           listingData = null;
           marketSummary = null;
+          importErrorMessage = String(e?.message || "").trim() || "Import annonce indisponible";
         }
         if (listingData) {
           normalizedProperty = normalizePropertyData(listingData as Record<string, unknown>);
@@ -475,6 +498,9 @@ const ProjectDetail = () => {
           setListing(listingData);
         }
       }
+
+      if (!prix && urlHints.priceHint) prix = urlHints.priceHint;
+      if (!surface && urlHints.surfaceHint) surface = urlHints.surfaceHint;
 
       const listingCodePostal = normalizePostalCode(String(listingData?.codePostal || manualCP || "").trim());
       const inferredFromUrl = parseSelogerLocationFromUrl(url);
@@ -536,12 +562,19 @@ const ProjectDetail = () => {
         toast({
           title: hasUrl ? "Extraction annonce bloquee" : "Données requises",
           description: hasUrl
-            ? "SeLoger bloque la lecture serveur (anti-bot). Active Firecrawl cote Supabase ou saisis prix/surface manuellement."
+            ? importErrorMessage || "SeLoger bloque la lecture serveur (anti-bot). Active Firecrawl cote Supabase ou saisis prix/surface manuellement."
             : "Renseignez le prix et la surface.",
           variant: "destructive",
         });
         setAnalysisStep("idle");
         return;
+      }
+
+      if (Boolean(url) && (urlHints.priceHint || urlHints.surfaceHint) && (!listingData?.prix || !listingData?.surface)) {
+        toast({
+          title: "Import partiel",
+          description: "Analyse poursuivie avec des indices URL SeLoger (prix/surface) en attendant les donnees completes.",
+        });
       }
 
       setAnalysisStep("analyzing");
