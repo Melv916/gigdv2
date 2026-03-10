@@ -263,26 +263,6 @@ function isValidCityValue(value: string | null | undefined): boolean {
   return s.length >= 2;
 }
 
-function parseSelogerHintsFromUrl(rawUrl: string): { priceHint: number | null; surfaceHint: number | null } {
-  try {
-    const u = new URL(rawUrl);
-    const directPrice = Number(u.searchParams.get("price") || 0);
-    const directSurface = Number(u.searchParams.get("surface") || 0);
-    const encodedSearch = u.searchParams.get("search") || "";
-    const decoded = decodeURIComponent(encodedSearch);
-    const mPriceMax = decoded.match(/(?:^|&)priceMax=(\d+)/i);
-    const mSpaceMin = decoded.match(/(?:^|&)spaceMin=(\d+(?:[.,]\d+)?)/i);
-    const hintPrice = directPrice > 0 ? directPrice : mPriceMax ? Number(mPriceMax[1]) : 0;
-    const hintSurface = directSurface > 0 ? directSurface : mSpaceMin ? Number(String(mSpaceMin[1]).replace(",", ".")) : 0;
-    return {
-      priceHint: Number.isFinite(hintPrice) && hintPrice > 0 ? hintPrice : null,
-      surfaceHint: Number.isFinite(hintSurface) && hintSurface > 0 ? hintSurface : null,
-    };
-  } catch {
-    return { priceHint: null, surfaceHint: null };
-  }
-}
-
 function pickRentM2(
   row: CityMarketPriceRow | null,
   type: "house" | "apartment",
@@ -314,6 +294,22 @@ async function fetchCityMarketReference(args: {
       .eq("insee_code", insee)
       .maybeSingle();
     if (data) return data as CityMarketPriceRow;
+  }
+
+  if (departementCode && cityCandidates.length > 0) {
+    const primaryCity = cityCandidates[0];
+    const { data } = await supabase
+      .from("city_market_prices")
+      .select("*")
+      .eq("departement_code", departementCode)
+      .ilike("commune", `%${primaryCity}%`)
+      .limit(100);
+    if (data && data.length > 0) {
+      const expected = normalizeCity(primaryCity);
+      const exact = data.find((r: any) => normalizeCity(String(r.commune || "")) === expected);
+      const starts = data.find((r: any) => normalizeCity(String(r.commune || "")).startsWith(expected));
+      return (exact || starts || data[0]) as CityMarketPriceRow;
+    }
   }
 
   if (cityCandidates.length > 0 || departementCode) {
@@ -474,7 +470,6 @@ const ProjectDetail = () => {
       let surface = manualSurface;
       let cityMarketRef: CityMarketPriceRow | null = null;
       let normalizedProperty: PropertyData | null = null;
-      const urlHints = parseSelogerHintsFromUrl(url);
 
       if (url) {
         try {
@@ -508,9 +503,6 @@ const ProjectDetail = () => {
           setListing(listingData);
         }
       }
-
-      if (!prix && urlHints.priceHint) prix = urlHints.priceHint;
-      if (!surface && urlHints.surfaceHint) surface = urlHints.surfaceHint;
 
       const listingCodePostal = normalizePostalCode(String(listingData?.codePostal || manualCP || "").trim());
       const inferredFromUrl = parseSelogerLocationFromUrl(url);
@@ -576,25 +568,15 @@ const ProjectDetail = () => {
 
       if (!prix || !surface) {
         const hasUrl = Boolean(url);
-        const safePrix = prix || manualPrix || urlHints.priceHint || 100000;
-        const safeSurface = surface || manualSurface || urlHints.surfaceHint || 40;
-        prix = safePrix;
-        surface = safeSurface;
         toast({
-          title: hasUrl ? "Import annonce partiel" : "Données partielles",
+          title: hasUrl ? "Données annonce incomplètes" : "Données requises",
           description: hasUrl
-            ? (importErrorMessage
-              ? `${importErrorMessage} · Analyse poursuivie avec des valeurs provisoires (${Math.round(safePrix)}€ / ${Math.round(safeSurface)}m²).`
-              : `Analyse poursuivie avec des valeurs provisoires (${Math.round(safePrix)}€ / ${Math.round(safeSurface)}m²).`)
-            : `Analyse poursuivie avec des valeurs provisoires (${Math.round(safePrix)}€ / ${Math.round(safeSurface)}m²).`,
+            ? (importErrorMessage || "Prix ou surface manquants sur l'annonce importée.")
+            : "Renseigne le prix et la surface.",
+          variant: "destructive",
         });
-      }
-
-      if (Boolean(url) && (urlHints.priceHint || urlHints.surfaceHint) && (!listingData?.prix || !listingData?.surface)) {
-        toast({
-          title: "Import partiel",
-          description: "Analyse poursuivie avec des indices URL SeLoger (prix/surface) en attendant les donnees completes.",
-        });
+        setAnalysisStep("idle");
+        return;
       }
 
       setAnalysisStep("analyzing");
@@ -625,13 +607,13 @@ const ProjectDetail = () => {
       }
 
       if (!loyerPourCalc) {
-        // Keep analysis running with a conservative temporary estimate when market rent is unavailable.
-        loyerPourCalc = Math.round((prix * 0.055) / 12);
-        setLoyerEstime(loyerPourCalc);
         toast({
-          title: "Loyer marche indisponible",
-          description: "Analyse poursuivie avec une estimation provisoire. Tu peux ajuster le loyer manuellement.",
+          title: "Loyer requis",
+          description: "Loyer de marché introuvable. Renseigne un loyer estimé réel pour lancer l'analyse.",
+          variant: "destructive",
         });
+        setAnalysisStep("idle");
+        return;
       }
 
       const fallbackAnalysis = buildFallbackAnalysisResult({
