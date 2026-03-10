@@ -256,6 +256,13 @@ function parseSelogerLocationFromUrl(rawUrl: string): { city: string | null; dep
   }
 }
 
+function isValidCityValue(value: string | null | undefined): boolean {
+  const s = cleanCityForLookup(String(value || ""));
+  if (!s) return false;
+  if (/\d/.test(s)) return false;
+  return s.length >= 2;
+}
+
 function parseSelogerHintsFromUrl(rawUrl: string): { priceHint: number | null; surfaceHint: number | null } {
   try {
     const u = new URL(rawUrl);
@@ -482,6 +489,9 @@ const ProjectDetail = () => {
         if (listingData) {
           normalizedProperty = normalizePropertyData(listingData as Record<string, unknown>);
           const inferredFromUrl = parseSelogerLocationFromUrl(url);
+          const cleanedCity = isValidCityValue(String(normalizedProperty.city || listingData?.ville || ""))
+            ? String(normalizedProperty.city || listingData?.ville)
+            : (inferredFromUrl.city || "");
           prix = normalizedProperty.purchasePrice || prix;
           surface = normalizedProperty.surface || surface;
           listingData = {
@@ -489,7 +499,7 @@ const ProjectDetail = () => {
             prix: normalizedProperty.purchasePrice || readNum(listingData?.prix) || listingData?.prix,
             surface: normalizedProperty.surface || readNum(listingData?.surface) || listingData?.surface,
             pieces: readNum(listingData?.pieces) || listingData?.pieces,
-            ville: normalizedProperty.city || listingData?.ville || inferredFromUrl.city,
+            ville: cleanedCity,
             codePostal: normalizedProperty.postalCode || listingData?.codePostal,
             insee: normalizedProperty.inseeCode || listingData?.insee,
             adresse: normalizedProperty.address || listingData?.adresse,
@@ -504,6 +514,13 @@ const ProjectDetail = () => {
 
       const listingCodePostal = normalizePostalCode(String(listingData?.codePostal || manualCP || "").trim());
       const inferredFromUrl = parseSelogerLocationFromUrl(url);
+      const isSelogerUrl = /seloger\.com/i.test(String(url || ""));
+      const listingCityRaw = String(listingData?.ville || "").trim();
+      const listingCity = isValidCityValue(listingCityRaw) ? listingCityRaw : "";
+      const cityForLookup =
+        isSelogerUrl && inferredFromUrl.city
+          ? inferredFromUrl.city
+          : (listingCity || inferredFromUrl.city || "");
       const inseeForDept = normalizeInsee(String((listingData as any)?.insee || "").trim());
       const listingDepartementCode =
         listingCodePostal.length >= 2
@@ -515,13 +532,13 @@ const ProjectDetail = () => {
             : String((listingData as any)?.departementCode || inferredFromUrl.departementCode || "").trim();
       cityMarketRef = await fetchCityMarketReference({
         insee: String((listingData as any)?.insee || "").trim(),
-        ville: String(listingData?.ville || inferredFromUrl.city || "").trim(),
+        ville: cityForLookup,
         postalCode: listingCodePostal,
         departementCode: listingDepartementCode,
       });
       console.log("[analysis] city_market_prices lookup", {
         insee: String((listingData as any)?.insee || "").trim() || null,
-        ville: String(listingData?.ville || "").trim() || null,
+        ville: cityForLookup || null,
         postalCode: listingCodePostal || null,
         departementCode: listingDepartementCode || null,
         found: Boolean(cityMarketRef),
@@ -809,6 +826,8 @@ const ProjectDetail = () => {
   const marketSourceLine = marketData?.sourcePrixM2 || marketData?.sourceLoyerM2
     ? `Source prix: ${marketData?.sourcePrixM2 || "n/a"} · Source loyer: ${marketData?.sourceLoyerM2 || "n/a"}`
     : null;
+  const marketPossibleRentMonthly =
+    marketRentRef > 0 && activeSurface > 0 ? Math.round(marketRentRef * activeSurface) : 0;
   const cashFlowMensuelNum = aiResult ? Number(String(aiResult.cashFlow || "0").replace(/[^0-9.-]/g, "")) : 0;
   const priceM2Annonce = activePrix > 0 && activeSurface > 0 ? activePrix / activeSurface : 0;
   const dvfMedianRef = marketPriceRef > 0
@@ -1174,9 +1193,15 @@ const ProjectDetail = () => {
                     <p className="text-[10px] text-muted-foreground mt-1">Rendement brut basé sur loyer estimé (hors charges, vacance, fiscalité).</p>
                   </div>
                   <div className="analysis-cockpit-subcard p-4">
-                    <p className="analysis-label flex items-center gap-2"><Percent size={14} strokeWidth={1.5} className="analysis-icon" /> Prix/m²</p>
-                    <p className="analysis-kpi">{aiResult.prixM2}</p>
-                    <p className="text-xs text-muted-foreground">annonce</p>
+                    <p className="analysis-label flex items-center gap-2"><Percent size={14} strokeWidth={1.5} className="analysis-icon" /> Loyer possible estime</p>
+                    <p className="analysis-kpi">
+                      {marketPossibleRentMonthly > 0
+                        ? `${marketPossibleRentMonthly.toLocaleString("fr-FR")}€/mois`
+                        : aiResult.loyerEstime}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      marche local (city_market_prices)
+                    </p>
                   </div>
                   <div className="analysis-cockpit-subcard p-4">
                     <p className="analysis-label flex items-center gap-2"><TrendingUp size={14} strokeWidth={1.5} className="analysis-icon" /> Loyer conseillé (8% brut)</p>
