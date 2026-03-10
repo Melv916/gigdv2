@@ -125,6 +125,20 @@ function extractHeuristic(text: string, url: string): ImportedListing {
   };
 }
 
+function fillMissingFromText(listing: ImportedListing, text: string, url: string): ImportedListing {
+  const h = extractHeuristic(text, url);
+  return {
+    ...listing,
+    prix: listing.prix || h.prix,
+    surface: listing.surface || h.surface,
+    codePostal: listing.codePostal || h.codePostal,
+    ville: listing.ville || h.ville,
+    typeLocal: listing.typeLocal || h.typeLocal,
+    description: listing.description || h.description,
+    vendeur: listing.vendeur || h.vendeur,
+  };
+}
+
 export async function importListingFromUrl(url: string): Promise<{
   canonicalUrl: string;
   listing: ImportedListing;
@@ -270,6 +284,9 @@ ${markdown.slice(0, 8000)}
       pieces: listing.pieces || structured.pieces,
       titre: listing.titre || structured.titre,
     };
+  }
+  if (listing && markdown && markdown.length >= 60) {
+    listing = fillMissingFromText(listing, markdown, canonicalUrl);
   }
   console.log("[listingImport] property extracted", {
     prix: listing?.prix ?? null,

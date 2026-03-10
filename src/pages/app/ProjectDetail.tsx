@@ -568,10 +568,13 @@ const ProjectDetail = () => {
 
       if (!prix || !surface) {
         const hasUrl = Boolean(url);
+        const missing: string[] = [];
+        if (!prix) missing.push("prix");
+        if (!surface) missing.push("surface");
         toast({
           title: hasUrl ? "Données annonce incomplètes" : "Données requises",
           description: hasUrl
-            ? (importErrorMessage || "Prix ou surface manquants sur l'annonce importée.")
+            ? (importErrorMessage || `${missing.join(" et ")} manquant(s) sur l'annonce importée.`)
             : "Renseigne le prix et la surface.",
           variant: "destructive",
         });
