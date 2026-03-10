@@ -15,9 +15,8 @@ describe("market source guards", () => {
     expect(content).toContain(".from(\"city_market_prices\")");
   });
 
-  it("project detail does not use rent-estimate fallback API", () => {
+  it("project detail can call rent-estimate API when city lookup is unavailable", () => {
     const content = read("src/pages/app/ProjectDetail.tsx");
-    expect(content).not.toContain("fetchRentEstimate(");
+    expect(content).toContain("fetchRentEstimate(");
   });
 });
-

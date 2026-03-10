@@ -1,25 +1,47 @@
 ﻿import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
+import { FileText, Home, Loader2 } from "lucide-react";
 import {
-  Link2, Loader2, AlertTriangle, CheckCircle2, TrendingUp, BarChart3,
-  MapPin, FileText, MessageSquare, User, Building2, Home, Settings, ArrowLeft, Percent, Tag, Target,
-} from "lucide-react";
-import {
-  calcFraisNotaire, calcCoutGlobal, calcMensualiteCredit, calcAssuranceMensuelle,
-  calcSeuilLoyerMinimum, calcProjections, type ProjectParams, type Projection,
+  calcFraisNotaire,
+  calcCoutGlobal,
+  calcMensualiteCredit,
+  calcAssuranceMensuelle,
+  calcSeuilLoyerMinimum,
+  calcProjections,
+  type ProjectParams,
+  type Projection,
 } from "@/lib/calculations";
-import { AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { createAnalysis, getMe, importAnalysisUrl } from "@/lib/v2/api";
-import { buildMarketData, normalizePropertyData, type MarketData, type PropertyData } from "@/lib/market/cityMarketPipeline";
+import { fetchRentEstimate } from "@/lib/investment/api";
+import {
+  buildMarketData,
+  normalizePropertyData,
+  type MarketData,
+  type PropertyData,
+} from "@/lib/market/cityMarketPipeline";
+import { buildAnalysisKpiModel } from "@/features/investment/analysis/kpiModel";
+import { AnalysisResultsCard } from "@/features/investment/analysis/components/AnalysisResultsCard";
+import {
+  AnalysisInputCard,
+  FinancialSummaryCards,
+  ListingInfoCard,
+  ProjectHeaderBar,
+  ProjectSettingsPanel,
+} from "@/features/investment/analysis/components/ProjectDetailTopSections";
+import {
+  fetchCityMarketReference,
+  inferDepartementCode,
+  isValidCityValue,
+  normalizePostalCode,
+  parseSelogerLocationFromUrl,
+  pickRentM2,
+  type CityMarketPriceRow,
+} from "@/features/investment/analysis/marketLookup";
 import "./project-detail-cockpit.css";
 
 interface Project {
@@ -60,28 +82,6 @@ interface AnalysisResult {
   scriptAgence: string[];
 }
 
-type CityMarketPriceRow = {
-  insee_code: string | null;
-  commune: string | null;
-  departement_code: string | null;
-  rent_m2_app_all: number | null;
-  rent_m2_app_t1t2: number | null;
-  rent_m2_app_t3plus: number | null;
-  rent_m2_house: number | null;
-  sale_m2_all: number | null;
-  prix_m2_moyen?: number | null;
-  loyer_m2_moyen?: number | null;
-  prix_m2_min_si_disponible?: number | null;
-  prix_m2_max_si_disponible?: number | null;
-  loyer_m2_min_si_disponible?: number | null;
-  loyer_m2_max_si_disponible?: number | null;
-  score_fiabilite?: number | null;
-  source_prix_m2?: string | null;
-  source_loyer_m2?: string | null;
-  date_reference_source?: string | null;
-  commentaire?: string | null;
-};
-
 const objectifLabels: Record<string, string> = { rp: "RP", locatif: "Locatif", marchand: "Marchand" };
 const strategieLabels: Record<string, string> = { "ld-nue": "LD nue", meuble: "Meublé", coloc: "Coloc", lcd: "LCD" };
 
@@ -116,16 +116,6 @@ function readNum(value: unknown): number {
   }
   const n = Number(normalized);
   return Number.isFinite(n) ? n : 0;
-}
-
-function computeGrossYield(loyerMensuel: number, basePrix: number): number {
-  if (!Number.isFinite(loyerMensuel) || !Number.isFinite(basePrix) || loyerMensuel <= 0 || basePrix <= 0) return 0;
-  return (loyerMensuel * 12 * 100) / basePrix;
-}
-
-function computeMinRentForTargetYield(basePrix: number, target = 0.08): number {
-  if (!Number.isFinite(basePrix) || basePrix <= 0) return 0;
-  return Math.ceil((target * basePrix) / 12);
 }
 
 function buildFallbackAnalysisResult(args: {
@@ -195,201 +185,6 @@ function inferTypology(surface: number, pieces?: number | null): "all" | "t1t2" 
   return "all";
 }
 
-function normalizeCity(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .toLowerCase();
-}
-
-function normalizeInsee(value: string): string {
-  const raw = String(value || "").trim().toUpperCase().replace(/\s/g, "");
-  if (!raw) return "";
-  if (/^\d+$/.test(raw)) return raw.padStart(5, "0");
-  if (/^(2A|2B)\d{1,3}$/.test(raw)) return raw.slice(0, 2) + raw.slice(2).padStart(3, "0");
-  return raw;
-}
-
-function normalizePostalCode(value: string): string {
-  return String(value || "").replace(/\D/g, "").slice(0, 5);
-}
-
-function cleanCityForLookup(value: string): string {
-  const v = String(value || "")
-    .replace(/\([^)]*\)/g, " ")
-    .replace(/\b\d{5}\b/g, " ")
-    .replace(/\b\d{2,3}\b/g, " ")
-    .replace(/\b\d+(?:er|e|eme)?\s*arr(?:ondissement)?\b/gi, " ")
-    .replace(/\barr(?:ondissement)?\b/gi, " ")
-    .replace(/\bcedex\b/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return v;
-}
-
-function cityLookupCandidates(value: string): string[] {
-  const cleaned = cleanCityForLookup(value);
-  if (!cleaned) return [];
-  const parts = cleaned.split(/[-/]/).map((p) => p.trim()).filter(Boolean);
-  return Array.from(new Set([cleaned, ...parts]));
-}
-
-function median(values: number[]): number | null {
-  const sorted = values
-    .filter((n) => Number.isFinite(n) && n > 0)
-    .sort((a, b) => a - b);
-  if (!sorted.length) return null;
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) return (sorted[mid - 1] + sorted[mid]) / 2;
-  return sorted[mid];
-}
-
-function parseSelogerLocationFromUrl(rawUrl: string): { city: string | null; departementCode: string | null } {
-  try {
-    const u = new URL(rawUrl);
-    const parts = u.pathname.split("/").filter(Boolean);
-    const slug = parts.find((p) => /-\d{2,3}$/.test(p)) || null;
-    if (!slug) return { city: null, departementCode: null };
-    const m = slug.match(/^(.*)-(\d{2,3})$/);
-    if (!m) return { city: null, departementCode: null };
-    const citySlug = m[1] || "";
-    const dept = m[2] || null;
-    const city = citySlug
-      .split("-")
-      .filter(Boolean)
-      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-      .join(" ");
-    return { city: city || null, departementCode: dept };
-  } catch {
-    return { city: null, departementCode: null };
-  }
-}
-
-function isValidCityValue(value: string | null | undefined): boolean {
-  const s = cleanCityForLookup(String(value || ""));
-  if (!s) return false;
-  if (/\d/.test(s)) return false;
-  return s.length >= 2;
-}
-
-function pickRentM2(
-  row: CityMarketPriceRow | null,
-  type: "house" | "apartment",
-  typology: "all" | "t1t2" | "t3plus",
-): number {
-  if (!row) return 0;
-  if (type === "house") return Number(row.rent_m2_house || row.rent_m2_app_all || 0);
-  if (typology === "t1t2") return Number(row.rent_m2_app_t1t2 || row.rent_m2_app_all || 0);
-  if (typology === "t3plus") return Number(row.rent_m2_app_t3plus || row.rent_m2_app_all || 0);
-  return Number(row.rent_m2_app_all || 0);
-}
-
-async function fetchCityMarketReference(args: {
-  insee?: string;
-  ville?: string;
-  postalCode?: string;
-  departementCode?: string;
-}): Promise<CityMarketPriceRow | null> {
-  const insee = normalizeInsee(String(args.insee || "").trim());
-  const ville = cleanCityForLookup(String(args.ville || "").trim());
-  const cityCandidates = cityLookupCandidates(ville);
-  const postalCode = normalizePostalCode(String(args.postalCode || "").trim());
-  const departementCode = String(args.departementCode || "").trim();
-
-  if (insee) {
-    const { data } = await supabase
-      .from("city_market_prices")
-      .select("*")
-      .eq("insee_code", insee)
-      .maybeSingle();
-    if (data) return data as CityMarketPriceRow;
-  }
-
-  if (departementCode && cityCandidates.length > 0) {
-    const primaryCity = cityCandidates[0];
-    const { data } = await supabase
-      .from("city_market_prices")
-      .select("*")
-      .eq("departement_code", departementCode)
-      .ilike("commune", `%${primaryCity}%`)
-      .limit(100);
-    if (data && data.length > 0) {
-      const expected = normalizeCity(primaryCity);
-      const exact = data.find((r: any) => normalizeCity(String(r.commune || "")) === expected);
-      const starts = data.find((r: any) => normalizeCity(String(r.commune || "")).startsWith(expected));
-      return (exact || starts || data[0]) as CityMarketPriceRow;
-    }
-  }
-
-  if (cityCandidates.length > 0 || departementCode) {
-    let query = supabase
-      .from("city_market_prices")
-      .select("*");
-    if (departementCode) {
-      query = query.eq("departement_code", departementCode).limit(5000);
-    } else if (cityCandidates.length > 0) {
-      query = query.limit(5000);
-    } else {
-      query = query.limit(200);
-    }
-
-    const { data } = await query;
-    if (data && data.length > 0) {
-      const expectedList = cityCandidates.map((c) => normalizeCity(c)).filter(Boolean);
-      const ranked = data
-        .map((r: any) => {
-          const communeNorm = normalizeCity(String(r.commune || ""));
-          let score = 0;
-          for (const expected of expectedList) {
-            if (expected && communeNorm === expected) score = Math.max(score, 100);
-            else if (expected && communeNorm.startsWith(expected)) score = Math.max(score, 70);
-            else if (expected && communeNorm.includes(expected)) score = Math.max(score, 50);
-          }
-          if (postalCode && r.departement_code && postalCode.startsWith(String(r.departement_code))) score += 20;
-          if (Number(r.rent_m2_app_all || r.loyer_m2_moyen || 0) > 0) score += 10;
-          if (Number(r.sale_m2_all || r.prix_m2_moyen || 0) > 0) score += 10;
-          return { row: r as CityMarketPriceRow, score };
-        })
-        .filter((x) => x.score > 0)
-        .sort((a, b) => b.score - a.score);
-
-      const selected = ranked[0]?.row || null;
-      if (selected) return selected;
-    }
-  }
-
-  // Last resort, but still from city_market_prices only: departmental medians.
-  if (departementCode) {
-    const { data } = await supabase
-      .from("city_market_prices")
-      .select("*")
-      .eq("departement_code", departementCode)
-      .limit(5000);
-    if (data && data.length > 0) {
-      const m = (key: keyof CityMarketPriceRow) =>
-        median(
-          data
-            .map((r: any) => Number(r?.[key] || 0))
-            .filter((n: number) => Number.isFinite(n) && n > 0),
-        );
-      return {
-        insee_code: null,
-        commune: null,
-        departement_code: departementCode,
-        rent_m2_app_all: m("rent_m2_app_all"),
-        rent_m2_app_t1t2: m("rent_m2_app_t1t2"),
-        rent_m2_app_t3plus: m("rent_m2_app_t3plus"),
-        rent_m2_house: m("rent_m2_house"),
-        sale_m2_all: m("sale_m2_all"),
-        commentaire: "fallback_departement_median_city_market_prices",
-      } as CityMarketPriceRow;
-    }
-  }
-
-  return null;
-}
-
 const ProjectDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
@@ -415,7 +210,6 @@ const ProjectDetail = () => {
   const [listing, setListing] = useState<any>(null);
   const [aiResult, setAiResult] = useState<AnalysisResult | null>(null);
   const [analysisStep, setAnalysisStep] = useState<"idle" | "scraping" | "analyzing" | "done">("idle");
-  const [scriptTab, setScriptTab] = useState<"particulier" | "agence">("particulier");
   const [v2AnalysisText, setV2AnalysisText] = useState("");
   const [cacheHit, setCacheHit] = useState(false);
   const [iaMode, setIaMode] = useState<"courte" | "complete">("courte");
@@ -551,15 +345,11 @@ const ProjectDetail = () => {
         isSelogerUrl && inferredFromUrl.city
           ? inferredFromUrl.city
           : (listingCity || inferredFromUrl.city || "");
-      const inseeForDept = normalizeInsee(String((listingData as any)?.insee || "").trim());
-      const listingDepartementCode =
-        listingCodePostal.length >= 2
-          ? listingCodePostal.startsWith("97") && listingCodePostal.length >= 3
-            ? listingCodePostal.slice(0, 3)
-            : listingCodePostal.slice(0, 2)
-          : inseeForDept
-            ? (/^97\d/.test(inseeForDept) ? inseeForDept.slice(0, 3) : inseeForDept.slice(0, 2))
-            : String((listingData as any)?.departementCode || inferredFromUrl.departementCode || "").trim();
+      const listingDepartementCode = inferDepartementCode({
+        postalCode: listingCodePostal,
+        insee: String((listingData as any)?.insee || "").trim(),
+        departementCode: String((listingData as any)?.departementCode || inferredFromUrl.departementCode || "").trim(),
+      });
       cityMarketRef = await fetchCityMarketReference({
         insee: String((listingData as any)?.insee || "").trim(),
         ville: cityForLookup,
@@ -645,6 +435,26 @@ const ProjectDetail = () => {
       let loyerPourCalc = marketRentMonthly > 0 ? marketRentMonthly : (loyerEstime || 0);
       if (marketRentMonthly > 0) {
         setLoyerEstime(marketRentMonthly);
+      }
+
+      if (!loyerPourCalc && Number(surface) > 0) {
+        try {
+          const rent = await fetchRentEstimate({
+            insee: String((listingData as any)?.insee || "").trim() || undefined,
+            city: cityForLookup || undefined,
+            departement_code: listingDepartementCode || undefined,
+            type,
+            typology,
+            surface: Number(surface),
+          });
+          const estimate = Number((rent as any)?.loyer_total_estime || 0);
+          if (Number.isFinite(estimate) && estimate > 0) {
+            loyerPourCalc = Math.round(estimate);
+            setLoyerEstime(loyerPourCalc);
+          }
+        } catch {
+          // Server-side lookup failed; handled by strict validation below.
+        }
       }
 
       if (!loyerPourCalc) {
@@ -824,40 +634,40 @@ const ProjectDetail = () => {
       }))
     : [];
 
-  const prixAnnonceNum = aiResult ? Number(String(aiResult.prixAnnonce).replace(/[^0-9.-]/g, "")) : 0;
-  const loyerEstimeNum = loyerEstime > 0
-    ? loyerEstime
-    : Number(String(aiResult?.loyerEstime || "").replace(/[^0-9.-]/g, "")) || 0;
-  const basePrixRendement = prixAnnonceNum > 0 ? prixAnnonceNum : coutGlobal;
-  const hasRentForYield = loyerEstimeNum > 0 && basePrixRendement > 0;
-  const rendementBrutCalc = hasRentForYield ? computeGrossYield(loyerEstimeNum, basePrixRendement) : null;
-  const minRent8 = computeMinRentForTargetYield(basePrixRendement, 0.08);
-  const rendementTargetReached = rendementBrutCalc !== null && rendementBrutCalc >= 8;
-  const prixCibleRendement8 = hasRentForYield ? (loyerEstimeNum * 12) / 0.08 : 0;
-  const ecartNego = hasRentForYield && !rendementTargetReached && basePrixRendement > 0 && prixCibleRendement8 > 0
-    ? Math.max(0, basePrixRendement - prixCibleRendement8)
-    : 0;
-  const ecartNegoPct = basePrixRendement > 0 && ecartNego > 0 ? (ecartNego / basePrixRendement) * 100 : 0;
-  const fraisNotairePrixCible = params && prixCibleRendement8 > 0 ? calcFraisNotaire(prixCibleRendement8, params.frais_notaire_pct) : 0;
-  const coutGlobalPrixCible = prixCibleRendement8 > 0 ? calcCoutGlobal(prixCibleRendement8, fraisNotairePrixCible, travaux, autresCouts) : 0;
-  const rendementAbove10 = rendementBrutCalc !== null && rendementBrutCalc > 10;
-  const projectionBase = basePrixRendement > 0 ? basePrixRendement : 0;
-  const marketPriceRef = Number(marketData?.marketPricePerSqm || 0);
-  const marketRentRef = Number(marketData?.marketRentPerSqm || 0);
-  const displayedDvf =
-    marketPriceRef > 0
-      ? `${Math.round(marketPriceRef).toLocaleString("fr-FR")}€/m²`
-      : aiResult?.prixM2Dvf || "n/a";
-  const marketSourceLine = marketData?.sourcePrixM2 || marketData?.sourceLoyerM2
-    ? `Source prix: ${marketData?.sourcePrixM2 || "n/a"} · Source loyer: ${marketData?.sourceLoyerM2 || "n/a"}`
-    : null;
-  const marketPossibleRentMonthly =
-    marketRentRef > 0 && activeSurface > 0 ? Math.round(marketRentRef * activeSurface) : 0;
-  const cashFlowMensuelNum = aiResult ? Number(String(aiResult.cashFlow || "0").replace(/[^0-9.-]/g, "")) : 0;
-  const priceM2Annonce = activePrix > 0 && activeSurface > 0 ? activePrix / activeSurface : 0;
-  const dvfMedianRef = marketPriceRef > 0
-    ? marketPriceRef
-    : Number(String(aiResult?.prixM2Dvf || "0").replace(/[^0-9.-]/g, ""));
+  const kpiModel = buildAnalysisKpiModel({
+    aiResult,
+    loyerEstime,
+    coutGlobal,
+    activePrix,
+    activeSurface,
+    marketData,
+    marketStatus,
+    travaux,
+    autresCouts,
+    fraisNotairePct: params?.frais_notaire_pct || 0,
+  });
+  const {
+    prixAnnonceNum,
+    basePrixRendement,
+    hasRentForYield,
+    rendementBrutCalc,
+    minRent8,
+    rendementTargetReached,
+    prixCibleRendement8,
+    ecartNego,
+    ecartNegoPct,
+    coutGlobalPrixCible,
+    rendementAbove10,
+    projectionBase,
+    marketRentRef,
+    displayedDvf,
+    marketSourceLine,
+    marketPossibleRentMonthly,
+    cashFlowMensuelNum,
+    priceM2Annonce,
+    dvfMedianRef,
+    marketDataMissing,
+  } = kpiModel;
   const pointsFortsDecision: { point: string; impact: string }[] = [];
   const pointsFaiblesDecision: { flag: string; impact: string }[] = [];
 
@@ -930,7 +740,7 @@ const ProjectDetail = () => {
     });
   }
 
-  if (marketStatus !== "ok") {
+  if (marketDataMissing) {
     pointsFaiblesDecision.push({
       flag: "Donnees de marche partielles",
       impact: "Decision possible mais confiance reduite sur le positionnement local",
@@ -990,473 +800,104 @@ const ProjectDetail = () => {
         <div className="analysis-cockpit-bg" />
         <div className="max-w-6xl mx-auto relative z-10">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-              <Link to="/app/projets" className="text-muted-foreground hover:text-foreground"><ArrowLeft size={20} /></Link>
-              <div>
-                <h1 className="text-xl font-display font-bold text-foreground">{project.name}</h1>
-                <p className="text-xs text-muted-foreground">
-                  {objectifLabels[project.objectif]} · {strategieLabels[project.strategie]} · {project.financement === "credit" ? "Crédit" : "Comptant"}
-                </p>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => setShowSettings(!showSettings)}>
-              <Settings size={14} /> Paramètres
-            </Button>
-          </div>
+          <ProjectHeaderBar
+            projectName={project.name}
+            objectiveLabel={objectifLabels[project.objectif] || project.objectif}
+            strategyLabel={strategieLabels[project.strategie] || project.strategie}
+            financingLabel={project.financement === "credit" ? "Credit" : "Comptant"}
+            onToggleSettings={() => setShowSettings((prev) => !prev)}
+          />
 
-          {/* Settings panel */}
           {showSettings && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="analysis-cockpit-card p-6 mb-6">
-              <h3 className="text-sm font-semibold text-foreground mb-4">Paramètres du projet <span className="text-primary text-xs">Méthode v0.1</span></h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Frais notaire (%)</Label>
-                  <Input type="number" step="0.5" value={project.frais_notaire_pct} onChange={(e) => updateProject("frais_notaire_pct", +e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Vacance (mois/an)</Label>
-                  <Input type="number" value={project.vacance_locative} onChange={(e) => updateProject("vacance_locative", +e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Croiss. valeur (%)</Label>
-                  <Input type="number" step="0.5" value={project.croissance_valeur} onChange={(e) => updateProject("croissance_valeur", +e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Croiss. loyers (%)</Label>
-                  <Input type="number" step="0.5" value={project.croissance_loyers} onChange={(e) => updateProject("croissance_loyers", +e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-                </div>
-                {project.financement === "credit" && (
-                  <>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Taux intérêt (%)</Label>
-                      <Input type="number" step="0.1" value={project.taux_interet} onChange={(e) => updateProject("taux_interet", +e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Durée crédit (ans)</Label>
-                      <Input type="number" value={project.duree_credit} onChange={(e) => updateProject("duree_credit", +e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Apport (€)</Label>
-                      <Input type="number" value={project.apport} onChange={(e) => updateProject("apport", +e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Assurance (%/an)</Label>
-                      <Input type="number" step="0.01" value={project.assurance_emprunteur} onChange={(e) => updateProject("assurance_emprunteur", +e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="flex justify-end mt-4 gap-2">
-                <Button variant="outline" size="sm" onClick={() => setShowSettings(false)}>Annuler</Button>
-                <Button variant="hero" size="sm" onClick={handleSaveSettings}>Sauvegarder</Button>
-              </div>
-            </motion.div>
+            <ProjectSettingsPanel
+              project={project}
+              onUpdate={updateProject}
+              onCancel={() => setShowSettings(false)}
+              onSave={handleSaveSettings}
+            />
           )}
 
-          {/* Analysis input */}
-          <div className="analysis-cockpit-card p-6 mb-6">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Analyser un bien</h3>
-            <Tabs defaultValue="url" className="space-y-4">
-              <TabsList className="bg-muted/30">
-                <TabsTrigger value="url">Lien annonce</TabsTrigger>
-                <TabsTrigger value="manual">Saisie manuelle</TabsTrigger>
-              </TabsList>
-              <TabsContent value="url">
-                <div className="flex items-center gap-2 bg-muted/20 rounded-lg p-1.5">
-                  <Link2 size={16} className="text-muted-foreground shrink-0 ml-2" />
-                  <input
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://www.seloger.com/annonces/achat/..."
-                    className="w-full bg-transparent text-foreground placeholder:text-muted-foreground text-sm py-2 outline-none"
-                    disabled={isAnalyzing}
-                  />
-                </div>
-              </TabsContent>
-              <TabsContent value="manual">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Prix (€)</Label>
-                    <Input type="number" value={manualPrix || ""} onChange={(e) => setManualPrix(+e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Surface (m²)</Label>
-                    <Input type="number" value={manualSurface || ""} onChange={(e) => setManualSurface(+e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Code postal</Label>
-                    <Input value={manualCP} onChange={(e) => setManualCP(e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
+          <AnalysisInputCard
+            url={url}
+            onUrlChange={setUrl}
+            isAnalyzing={isAnalyzing}
+            manualPrix={manualPrix}
+            onManualPrixChange={setManualPrix}
+            manualSurface={manualSurface}
+            onManualSurfaceChange={setManualSurface}
+            manualCP={manualCP}
+            onManualCPChange={setManualCP}
+            travaux={travaux}
+            onTravauxChange={setTravaux}
+            chargesMensuelles={chargesMensuelles}
+            onChargesMensuellesChange={setChargesMensuelles}
+            taxeFonciere={taxeFonciere}
+            onTaxeFonciereChange={setTaxeFonciere}
+            loyerEstime={loyerEstime}
+            onLoyerEstimeChange={setLoyerEstime}
+            adr={adr}
+            onAdrChange={setAdr}
+            autresCouts={autresCouts}
+            onAutresCoutsChange={setAutresCouts}
+            occupationCible={occupationCible}
+            onOccupationCibleChange={setOccupationCible}
+            projectStrategie={project.strategie}
+            analysisStep={analysisStep}
+            onRun={handleAnalyse}
+          />
 
-            {/* Additional inputs */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-              <div className="space-y-1">
-                <Label className="text-xs">Travaux (€)</Label>
-                <Input type="number" value={travaux || ""} onChange={(e) => setTravaux(+e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Charges/mois (€)</Label>
-                <Input type="number" value={chargesMensuelles || ""} onChange={(e) => setChargesMensuelles(+e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Taxe foncière/an (€)</Label>
-                <Input type="number" value={taxeFonciere || ""} onChange={(e) => setTaxeFonciere(+e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">{project.strategie === "lcd" ? "ADR (€/nuit)" : "Loyer estimé (€/mois)"}</Label>
-                <Input
-                  type="number"
-                  value={project.strategie === "lcd" ? adr || "" : loyerEstime || ""}
-                  onChange={(e) => project.strategie === "lcd" ? setAdr(+e.target.value) : setLoyerEstime(+e.target.value)}
-                  className="bg-muted/30 border-border/50 h-9 text-sm"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Autres coûts (€)</Label>
-                <Input type="number" value={autresCouts || ""} onChange={(e) => setAutresCouts(+e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-              </div>
-              {project.strategie === "lcd" && (
-                <div className="space-y-1">
-                  <Label className="text-xs">Occupation cible (%)</Label>
-                  <Input type="number" value={occupationCible} onChange={(e) => setOccupationCible(+e.target.value)} className="bg-muted/30 border-border/50 h-9 text-sm" />
-                </div>
-              )}
-            </div>
+          {listing && <ListingInfoCard listing={listing} />}
 
-            <Button variant="hero" className="w-full mt-4" onClick={handleAnalyse} disabled={isAnalyzing}>
-              {analysisStep === "scraping" ? <><Loader2 className="animate-spin" size={16} /> Lecture de l'annonce…</> :
-               analysisStep === "analyzing" ? <><Loader2 className="animate-spin" size={16} /> Analyse en cours…</> :
-               "Lancer l'analyse"}
-            </Button>
-          </div>
-
-          {/* Listing info */}
-          {listing && (
-            <div className="analysis-cockpit-card p-4 flex flex-wrap items-center gap-4 mb-6">
-              <Home size={18} className="text-primary shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">{listing.titre || `${listing.typeLocal} ${listing.pieces}p`}</p>
-                <p className="text-xs text-muted-foreground">
-                  {listing.ville} {listing.codePostal} — {listing.surface}m² — {listing.prix?.toLocaleString("fr-FR")}€
-                  {listing.dpe ? ` — DPE ${listing.dpe}` : ""}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Financial summary (always visible if we have a price) */}
           {activePrix > 0 && params && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-              {[
-                { label: "Frais de notaire", value: `${fraisNotaire.toLocaleString("fr-FR")}€`, sub: `${params.frais_notaire_pct}% du prix` },
-                { label: "Coût global", value: `${coutGlobal.toLocaleString("fr-FR")}€`, sub: "Achat + notaire + travaux" },
-                ...(params.financement === "credit" ? [
-                  { label: "Mensualité crédit", value: `${mensualiteCredit.toLocaleString("fr-FR")}€/mois`, sub: `+ ${assuranceMensuelle}€ assurance` },
-                  { label: "Capital emprunté", value: `${capitalEmprunte.toLocaleString("fr-FR")}€`, sub: `${params.duree_credit} ans à ${params.taux_interet}%` },
-                ] : []),
-              ].map((s) => (
-                <div key={s.label} className="analysis-cockpit-subcard p-4">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{s.label}</p>
-                  <p className="text-lg font-display font-bold text-foreground">{s.value}</p>
-                  <p className="text-xs text-muted-foreground">{s.sub}</p>
-                </div>
-              ))}
-            </div>
+            <FinancialSummaryCards
+              fraisNotaire={fraisNotaire}
+              coutGlobal={coutGlobal}
+              mensualiteCredit={mensualiteCredit}
+              assuranceMensuelle={assuranceMensuelle}
+              capitalEmprunte={capitalEmprunte}
+              fraisNotairePct={params.frais_notaire_pct}
+              financement={params.financement}
+              dureeCredit={params.duree_credit}
+              tauxInteret={params.taux_interet}
+            />
           )}
 
-          {/* AI Results */}
-          {aiResult && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              <div className="analysis-cockpit-card p-6 md:p-8">
-                {/* 1) Header analyse */}
-                <div className="analysis-head-wrap mb-6">
-                  <div>
-                    <p className="analysis-label mb-2">Cockpit d'analyse</p>
-                    <h2 className="text-xl md:text-2xl font-display font-bold text-foreground">
-                      {listing?.titre || project.name} · {strategieLabels[project.strategie]}
-                    </h2>
-                  </div>
-                  <div className={`analysis-verdict ${
-                    aiResult.decision === "FONCEZ" ? "analysis-verdict-positive" :
-                    aiResult.decision === "TROP CHER" ? "analysis-verdict-negative" :
-                    "analysis-verdict-neutral"
-                  }`}>
-                    {aiResult.decision}
-                  </div>
-                </div>
-
-                {/* 2) KPIs prioritaires */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-                  <div className="analysis-cockpit-subcard p-4">
-                    <p className="analysis-label flex items-center gap-2"><TrendingUp size={14} strokeWidth={1.5} className="analysis-icon" /> Cash-flow</p>
-                    <p className="analysis-kpi">{aiResult.cashFlow}</p>
-                    <p className="text-xs text-muted-foreground">mensuel</p>
-                  </div>
-                  <div className="analysis-cockpit-subcard p-4">
-                    <p className="analysis-label flex items-center gap-2"><BarChart3 size={14} strokeWidth={1.5} className="analysis-icon" /> Rendement brut</p>
-                    <p className="analysis-kpi">{rendementBrutCalc !== null ? formatPct(rendementBrutCalc) : "n/a"}</p>
-                    <div className="flex flex-wrap items-center gap-2 mt-1">
-                      <span className={`analysis-yield-badge ${!hasRentForYield ? "analysis-yield-badge-low" : rendementTargetReached ? "analysis-yield-badge-ok" : "analysis-yield-badge-low"}`}>
-                        {!hasRentForYield ? "Indispo (loyer manquant)" : rendementTargetReached ? "OK (≥ 8%)" : "Sous objectif"}
-                      </span>
-                      {rendementAbove10 && <span className="analysis-yield-badge analysis-yield-badge-high">Au-dessus de la cible (10%+)</span>}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {!hasRentForYield
-                        ? "Ajoute un loyer estimé mensuel pour calculer le rendement brut."
-                        : rendementTargetReached
-                        ? "Objectif investisseur atteint (8–10%)."
-                        : <>Pour atteindre 8% de rendement brut, il faut un loyer ≥ <span className="text-primary font-semibold">{formatEUR(minRent8)}/mois</span>.</>}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground mt-1">Rendement brut basé sur loyer estimé (hors charges, vacance, fiscalité).</p>
-                  </div>
-                  <div className="analysis-cockpit-subcard p-4">
-                    <p className="analysis-label flex items-center gap-2"><Percent size={14} strokeWidth={1.5} className="analysis-icon" /> Loyer possible estime</p>
-                    <p className="analysis-kpi">
-                      {marketPossibleRentMonthly > 0
-                        ? `${marketPossibleRentMonthly.toLocaleString("fr-FR")}€/mois`
-                        : aiResult.loyerEstime}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      marche local (city_market_prices)
-                    </p>
-                  </div>
-                  <div className="analysis-cockpit-subcard p-4">
-                    <p className="analysis-label flex items-center gap-2"><TrendingUp size={14} strokeWidth={1.5} className="analysis-icon" /> Loyer conseillé (8% brut)</p>
-                    <p className="analysis-kpi">{minRent8 > 0 ? `${minRent8.toLocaleString("fr-FR")}€/mois` : "n/a"}</p>
-                    <p className="text-xs text-muted-foreground">Base prix annonce (fallback coût global)</p>
-                  </div>
-                </div>
-
-                {/* 3) Bloc négociation central */}
-                <div className="analysis-cockpit-subcard p-5 mb-6">
-                  <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <Target size={14} strokeWidth={1.5} className="analysis-icon" /> Négociation
-                  </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {[
-                      { icon: Tag, label: "Prix annoncé", value: aiResult.prixAnnonce, sub: aiResult.prixM2 },
-                      { icon: Tag, label: "Prix cible (8% brut)", value: hasRentForYield && prixCibleRendement8 > 0 ? formatEUR(prixCibleRendement8) : "n/a", sub: "hors frais" },
-                      { icon: Tag, label: "Coût global cible", value: hasRentForYield && prixCibleRendement8 > 0 ? formatEUR(coutGlobalPrixCible) : "n/a", sub: "prix cible + notaire + travaux" },
-                      {
-                        icon: Target,
-                        label: "Ecart nego",
-                        value: hasRentForYield
-                          ? `${formatEUR(ecartNego)}${ecartNegoPct > 0 ? ` (${formatPct(ecartNegoPct)})` : ""}`
-                          : "n/a",
-                        sub: !hasRentForYield
-                          ? "loyer marche indisponible, ecart non calculable"
-                          : ecartNego > 0
-                            ? "capital a negocier pour atteindre 8% brut"
-                            : "pas besoin de negocier (8% brut deja atteint)",
-                      },
-                    ].map((s) => (
-                      <div key={s.label} className="analysis-kpi-box">
-                        <p className="analysis-label flex items-center gap-2"><s.icon size={13} strokeWidth={1.5} className="analysis-icon" /> {s.label}</p>
-                        <p className="text-lg md:text-xl font-display font-bold text-foreground mt-2">{s.value}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{s.sub}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 4) Seuil loyer minimum */}
-                {seuilTypes.length > 0 && (
-                  <div className="analysis-cockpit-subcard p-5 mb-6">
-                    <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                      <TrendingUp size={14} strokeWidth={1.5} className="analysis-icon" /> Seuil de loyer minimum (cash-flow = 0)
-                    </h4>
-                    <Tabs defaultValue={project.strategie}>
-                      <TabsList className="bg-muted/30">
-                        {seuilTypes.map((s) => (
-                          <TabsTrigger key={s.type} value={s.type}>{s.label}</TabsTrigger>
-                        ))}
-                      </TabsList>
-                      {seuilTypes.map((s) => (
-                        <TabsContent key={s.type} value={s.type}>
-                          <div className="analysis-threshold-row">
-                            <span className="text-sm text-muted-foreground">
-                              {s.type === "lcd" ? "Revenu minimum mensuel" :
-                               s.type === "coloc" ? "Loyer total minimum" :
-                               `Loyer minimum (${s.label})`}
-                            </span>
-                            <span className="text-2xl font-display font-bold text-primary">{s.seuil.toLocaleString("fr-FR")}€/mois</span>
-                          </div>
-                          {s.type === "lcd" && adr > 0 && (
-                            <p className="text-xs text-muted-foreground mt-2">
-                              Occupation minimum : {Math.ceil((s.seuil / adr / 30) * 100)}% ({Math.ceil(s.seuil / adr)} nuits/mois)
-                            </p>
-                          )}
-                        </TabsContent>
-                      ))}
-                    </Tabs>
-                    <p className="text-[10px] text-muted-foreground mt-2">Hypothèses utilisées : notaire {params?.frais_notaire_pct}%, vacance {params?.vacance_locative} mois/an · Méthode v0.1</p>
-                  </div>
-                )}
-
-                {/* 5) Marché + Données clés + points intégrés */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                  <div className="analysis-cockpit-subcard p-5">
-                    <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                      <Building2 size={14} strokeWidth={1.5} className="analysis-icon" /> Marché et données clés
-                    </h4>
-                    <div className="mb-3">
-                      <span className={`analysis-yield-badge ${
-                        marketStatus === "ok"
-                          ? "analysis-yield-badge-ok"
-                          : marketStatus === "processing"
-                            ? "analysis-yield-badge-high"
-                            : "analysis-yield-badge-low"
-                      }`}>
-                        Enrichissement marché: {marketStatus === "ok" ? "OK" : marketStatus === "processing" ? "En cours" : "Indispo"}
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      {[
-                        { icon: MapPin, label: "Prix moyen marché (ville)", value: displayedDvf },
-                        { icon: TrendingUp, label: "Loyer marché (m²)", value: marketRentRef > 0 ? `${Math.round(marketRentRef).toLocaleString("fr-FR")}€/m²` : "n/a" },
-                        { icon: FileText, label: "Cash-flow mensuel", value: aiResult.cashFlow },
-                      ].map((m) => (
-                        <div key={m.label} className="analysis-line-item">
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <m.icon size={14} strokeWidth={1.5} className="analysis-icon" />
-                            <span className="text-sm">{m.label}</span>
-                          </div>
-                          <span className="text-sm font-semibold text-foreground">{m.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {marketSourceLine && (
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        {marketSourceLine}
-                      </p>
-                    )}
-                    <p className="text-[10px] text-muted-foreground mt-3 border border-border/40 rounded-full inline-flex px-2 py-0.5">
-                      Hypothèses v0.1 · city_market_prices
-                    </p>
-                  </div>
-                  <div className="analysis-cockpit-subcard p-5">
-                    <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                      <AlertTriangle size={14} strokeWidth={1.5} className="analysis-icon" /> Lecture qualitative
-                    </h4>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="analysis-label mb-2 flex items-center gap-2"><CheckCircle2 size={13} strokeWidth={1.5} className="text-green-400" /> Points forts</p>
-                        <ul className="analysis-list">
-                          {pointsFortsDecision.length > 0 ? pointsFortsDecision.map((g, i) => (
-                            <li key={i}><span className="text-foreground">{g.point}</span> <span className="text-green-400">({g.impact})</span></li>
-                          )) : <li>Aucun point positif détecté.</li>}
-                        </ul>
-                      </div>
-                      <div>
-                        <p className="analysis-label mb-2 flex items-center gap-2"><AlertTriangle size={13} strokeWidth={1.5} className="text-amber-400" /> Points faibles / risques</p>
-                        <ul className="analysis-list">
-                          {pointsFaiblesDecision.length > 0 ? pointsFaiblesDecision.map((r, i) => (
-                            <li key={i}><span className="text-foreground">{r.flag}</span> <span className="text-amber-400">(Impact : {r.impact})</span></li>
-                          )) : <li>Aucun risque majeur détecté.</li>}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 6) Projections */}
-                {projections.length > 0 && (
-                  <div className="analysis-cockpit-subcard p-5 mb-6">
-                    <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                      <TrendingUp size={14} strokeWidth={1.5} className="analysis-icon" /> Projections 5 / 10 / 20 ans
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                      {projections.map((p) => (
-                        <div key={p.annee} className="analysis-kpi-box">
-                          <p className="analysis-label mb-2">À {p.annee} ans</p>
-                          <div className="space-y-1 text-xs">
-                            <div className="flex justify-between"><span className="text-muted-foreground">Valeur du bien</span><span className="text-foreground font-semibold">{formatEUR(p.valeurBien)} {projectionBase > 0 ? <span className="text-cyan-300">({formatPct((p.valeurBien / projectionBase) * 100)})</span> : null}</span></div>
-                            <div className="flex justify-between"><span className="text-muted-foreground">Capital remboursé</span><span className="text-foreground font-semibold">{p.capitalRembourse.toLocaleString("fr-FR")}€</span></div>
-                            <div className="flex justify-between"><span className="text-muted-foreground">Cash-flow cumulé</span><span className={`font-semibold ${p.cashFlowCumule >= 0 ? "text-green-400" : "text-destructive"}`}>{formatEUR(p.cashFlowCumule)} {projectionBase > 0 ? <span className="text-cyan-300">({formatPct((p.cashFlowCumule / projectionBase) * 100)})</span> : null}</span></div>
-                            <div className="flex justify-between border-t border-border/30 pt-1 mt-1"><span className="text-muted-foreground">Valeur nette créée</span><span className={`font-bold ${p.valeurNette >= 0 ? "text-primary" : "text-destructive"}`}>{formatEUR(p.valeurNette)} {projectionBase > 0 ? <span className="text-cyan-300">({formatPct((p.valeurNette / projectionBase) * 100)})</span> : null}</span></div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="analysis-chart-wrap h-72">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={projectionCurveData}>
-                          <defs>
-                            <linearGradient id="netGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#2F8CFF" stopOpacity={0.35} />
-                              <stop offset="100%" stopColor="#2F8CFF" stopOpacity={0.02} />
-                            </linearGradient>
-                            <linearGradient id="cashGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#22D3EE" stopOpacity={0.18} />
-                              <stop offset="100%" stopColor="#22D3EE" stopOpacity={0.02} />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                          <ReferenceLine y={0} stroke="rgba(255,255,255,0.35)" strokeWidth={1.5} />
-                          <XAxis
-                            type="number"
-                            dataKey="annee"
-                            domain={[0, 20]}
-                            ticks={[0, 5, 10, 15, 20]}
-                            tickFormatter={(v) => `${v} ans`}
-                            stroke="rgba(219,232,255,0.75)"
-                            fontSize={11}
-                          />
-                          <YAxis stroke="rgba(219,232,255,0.75)" fontSize={11} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                          <Tooltip content={renderProjectionTooltip} />
-                          <Area type="monotone" dataKey="valeurNette" stroke="#2F8CFF" strokeWidth={3} fill="url(#netGradient)" />
-                          <Area type="monotone" dataKey="cashFlowCumule" stroke="#22D3EE" strokeWidth={2.5} fill="url(#cashGradient)" />
-                          <Line type="monotone" dataKey="valeurBien" stroke="#8fb5ff" strokeWidth={1.8} strokeDasharray="4 4" dot={{ r: 3, fill: "#8fb5ff" }} />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="analysis-line-legend">
-                      <span><i style={{ background: "#2F8CFF" }} /> Valeur nette créée</span>
-                      <span><i style={{ background: "#22D3EE" }} /> Cash-flow cumulé</span>
-                      <span><i style={{ background: "#8fb5ff" }} /> Valeur du bien</span>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground mt-2">
-                      Hypothèses : valeur +{params?.croissance_valeur}%/an, loyers +{params?.croissance_loyers}%/an, charges +{params?.inflation_charges}%/an · Méthode v0.1
-                    </p>
-                  </div>
-                )}
-
-                {/* 7) Scripts */}
-                <div className="analysis-cockpit-subcard p-5">
-                  <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                    <Target size={14} strokeWidth={1.5} className="analysis-icon" /> Scripts de négociation
-                  </h4>
-                  <div className="flex gap-2 mb-3">
-                    <button
-                      onClick={() => setScriptTab("particulier")}
-                      className={`analysis-tab-btn ${scriptTab === "particulier" ? "analysis-tab-btn-active" : ""}`}
-                    >
-                      <User size={12} strokeWidth={1.5} /> Particulier
-                    </button>
-                    <button
-                      onClick={() => setScriptTab("agence")}
-                      className={`analysis-tab-btn ${scriptTab === "agence" ? "analysis-tab-btn-active" : ""}`}
-                    >
-                      <Building2 size={12} strokeWidth={1.5} /> Agence
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {(scriptTab === "particulier" ? aiResult.scriptParticulier : aiResult.scriptAgence)?.map((s, i) => (
-                      <div key={i} className="analysis-script-line">{s}</div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
+	          {/* AI Results */}
+	          {aiResult && (
+	            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+	              <AnalysisResultsCard
+	                aiResult={aiResult}
+	                title={listing?.titre || project.name}
+	                strategyLabel={strategieLabels[project.strategie]}
+	                hasRentForYield={hasRentForYield}
+	                rendementBrutCalc={rendementBrutCalc}
+	                rendementTargetReached={rendementTargetReached}
+	                rendementAbove10={rendementAbove10}
+	                minRent8={minRent8}
+	                marketPossibleRentMonthly={marketPossibleRentMonthly}
+	                prixCibleRendement8={prixCibleRendement8}
+	                coutGlobalPrixCible={coutGlobalPrixCible}
+	                ecartNego={ecartNego}
+	                ecartNegoPct={ecartNegoPct}
+	                seuilTypes={seuilTypes}
+	                projectStrategie={project.strategie}
+	                adr={adr}
+	                params={params}
+	                marketStatus={marketStatus}
+	                displayedDvf={displayedDvf}
+	                marketRentRef={marketRentRef}
+	                marketSourceLine={marketSourceLine}
+	                pointsFortsDecision={pointsFortsDecision}
+	                pointsFaiblesDecision={pointsFaiblesDecision}
+	                projections={projections}
+	                projectionBase={projectionBase}
+	                projectionCurveData={projectionCurveData}
+	                renderProjectionTooltip={renderProjectionTooltip}
+	                formatEUR={formatEUR}
+	                formatPct={formatPct}
+	              />
+	            </motion.div>
+	          )}
 
           {/* Saved analyses history */}
           {savedAnalyses.length > 0 && (
@@ -1473,14 +914,11 @@ const ProjectDetail = () => {
                       key={a.id}
                       onClick={() => {
                         if (listing) setListing(listing);
-                        if (result) {
-                          setAiResult(result);
-                          setAnalysisStep("done");
-                          setMarketStatus("indisponible");
-                          setMarketEnrichment(null);
-                          setMarketSources([]);
-                          setMarketAnalysisId(null);
-                          const loyerRaw = String(result.loyerEstime || "0");
+	                        if (result) {
+	                          setAiResult(result);
+	                          setAnalysisStep("done");
+	                          setMarketStatus("indisponible");
+	                          const loyerRaw = String(result.loyerEstime || "0");
                           const loyerMatch = loyerRaw.match(/(\d[\d\s]*)/);
                           const loyerParsed = loyerMatch ? parseFloat(loyerMatch[1].replace(/\s/g, "")) : 0;
                           const lp = Number(a.loyer_estime) || loyerParsed || 0;

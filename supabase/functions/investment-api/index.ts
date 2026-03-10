@@ -14,6 +14,48 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const db = createClient(supabaseUrl, supabaseKey);
 
+function normalizeCity(value: string): string {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toLowerCase();
+}
+
+async function resolveInseeFromCityAndDepartment(
+  city: string | undefined,
+  departementCode: string | undefined,
+): Promise<string | null> {
+  const ville = String(city || "").trim();
+  const dept = String(departementCode || "").trim();
+  if (!ville) return null;
+
+  let query = db
+    .from("city_market_prices")
+    .select("insee_code,commune,departement_code")
+    .limit(5000);
+
+  if (dept) query = query.eq("departement_code", dept);
+
+  const { data } = await query;
+  if (!data || data.length === 0) return null;
+
+  const expected = normalizeCity(ville);
+  const ranked = data
+    .map((row) => {
+      const communeNorm = normalizeCity(String(row.commune || ""));
+      let score = 0;
+      if (communeNorm === expected) score = 100;
+      else if (communeNorm.startsWith(expected)) score = 70;
+      else if (communeNorm.includes(expected)) score = 50;
+      return { insee: row.insee_code, score };
+    })
+    .filter((r) => r.score > 0 && r.insee)
+    .sort((a, b) => b.score - a.score);
+
+  return ranked[0]?.insee ?? null;
+}
+
 const provider: RentDataProvider = {
   async getParisEncadrement(input) {
     // Market references are restricted to city_market_prices only.
@@ -24,18 +66,19 @@ const provider: RentDataProvider = {
     // Unique market source: city_market_prices.
     const { data: city } = await db
       .from("city_market_prices")
-      .select("insee_code,departement_code,rent_m2_app_all,rent_m2_app_t1t2,rent_m2_app_t3plus,rent_m2_house")
+      .select("insee_code,departement_code,rent_m2_app_all,rent_m2_app_t1t2,rent_m2_app_t3plus,rent_m2_house,loyer_m2_moyen")
       .eq("insee_code", insee)
       .maybeSingle();
     if (city) {
+      const rentAll = Number(city.rent_m2_app_all ?? city.loyer_m2_moyen ?? 0) || null;
       return {
         insee_code: city.insee_code,
         departement_code: city.departement_code,
         source_hint: "CITY_MARKET" as const,
-        loyer_m2_cc_app_all: city.rent_m2_app_all,
-        loyer_m2_cc_app_t1t2: city.rent_m2_app_t1t2,
-        loyer_m2_cc_app_t3plus: city.rent_m2_app_t3plus,
-        loyer_m2_cc_house: city.rent_m2_house,
+        loyer_m2_cc_app_all: rentAll,
+        loyer_m2_cc_app_t1t2: Number(city.rent_m2_app_t1t2 ?? city.rent_m2_app_all ?? city.loyer_m2_moyen ?? 0) || null,
+        loyer_m2_cc_app_t3plus: Number(city.rent_m2_app_t3plus ?? city.rent_m2_app_all ?? city.loyer_m2_moyen ?? 0) || null,
+        loyer_m2_cc_house: Number(city.rent_m2_house ?? city.rent_m2_app_all ?? city.loyer_m2_moyen ?? 0) || null,
       };
     }
     return null;
@@ -45,16 +88,22 @@ const provider: RentDataProvider = {
     // Department fallback remains constrained to city_market_prices.
     const { data: cityRows } = await db
       .from("city_market_prices")
-      .select("rent_m2_app_all,rent_m2_app_t1t2,rent_m2_app_t3plus,rent_m2_house")
+      .select("rent_m2_app_all,rent_m2_app_t1t2,rent_m2_app_t3plus,rent_m2_house,loyer_m2_moyen")
       .eq("departement_code", departementCode)
       .limit(5000);
     if (cityRows && cityRows.length > 0) {
       const values = cityRows
         .map((row) => {
-          if ((input.type ?? "apartment") === "house") return Number(row.rent_m2_house ?? 0);
-          if ((input.typology ?? "all") === "t1t2") return Number(row.rent_m2_app_t1t2 ?? row.rent_m2_app_all ?? 0);
-          if ((input.typology ?? "all") === "t3plus") return Number(row.rent_m2_app_t3plus ?? row.rent_m2_app_all ?? 0);
-          return Number(row.rent_m2_app_all ?? 0);
+          if ((input.type ?? "apartment") === "house") {
+            return Number(row.rent_m2_house ?? row.rent_m2_app_all ?? row.loyer_m2_moyen ?? 0);
+          }
+          if ((input.typology ?? "all") === "t1t2") {
+            return Number(row.rent_m2_app_t1t2 ?? row.rent_m2_app_all ?? row.loyer_m2_moyen ?? 0);
+          }
+          if ((input.typology ?? "all") === "t3plus") {
+            return Number(row.rent_m2_app_t3plus ?? row.rent_m2_app_all ?? row.loyer_m2_moyen ?? 0);
+          }
+          return Number(row.rent_m2_app_all ?? row.loyer_m2_moyen ?? 0);
         })
         .filter((n) => Number.isFinite(n) && n > 0);
       if (values.length > 0) return values.reduce((sum, n) => sum + n, 0) / values.length;
@@ -82,9 +131,12 @@ serve(async (req) => {
 
     if (req.method === "GET" && route === "/api/rent-estimate") {
       const url = new URL(req.url);
+      const city = url.searchParams.get("city") ?? undefined;
+      const depCode = url.searchParams.get("departement_code") ?? undefined;
+      const inseeFromLocation = await resolveInseeFromCityAndDepartment(city, depCode);
       const input: RentEstimateInput = {
-        insee: url.searchParams.get("insee") ?? undefined,
-        departement_code: url.searchParams.get("departement_code") ?? undefined,
+        insee: inseeFromLocation ?? (url.searchParams.get("insee") ?? undefined),
+        departement_code: depCode,
         arrondissement_paris: url.searchParams.get("arrondissement") ?? undefined,
         type: (url.searchParams.get("type") as RentEstimateInput["type"]) ?? "apartment",
         typology: (url.searchParams.get("typology") as RentEstimateInput["typology"]) ?? "all",

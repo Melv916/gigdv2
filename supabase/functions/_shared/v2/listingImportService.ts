@@ -107,7 +107,7 @@ function extractHeuristic(text: string, url: string): ImportedListing {
   const priceMatch = text.match(/((?:\d{1,3}(?:[\s\u00A0]\d{3})+)|\d{5,8})(?:\s?(?:\u20AC|eur|euro|euros))\b/i);
   const surfaceMatch = text.match(/(\d{1,3}(?:[.,]\d{1,2})?)\s?m(?:2|\u00B2)\b/i);
   const cpMatch = text.match(/\b\d{5}\b/);
-  const inseeMatch = text.match(/\b(?:insee|code\s*insee)\s*[:\-]?\s*(\d{5})\b/i);
+  const inseeMatch = text.match(/\b(?:insee|code\s*insee)\s*[:-]?\s*(\d{5})\b/i);
   const title = text.split("\n").map((l) => l.trim()).find((l) => l.length > 8 && l.length < 140) || "Annonce importee";
   const host = new URL(url).hostname.replace(/^www\./, "");
 
