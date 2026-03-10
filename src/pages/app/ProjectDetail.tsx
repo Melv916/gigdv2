@@ -614,14 +614,16 @@ const ProjectDetail = () => {
           : 0;
       const mensualiteTotaleLocal = mensualiteCreditLocal + assuranceMensuelleLocal;
 
-      let loyerPourCalc = loyerEstime || 0;
-      if (!loyerPourCalc && surface > 0) {
-        const rentM2FromCityTable = normalizedMarket.marketRentPerSqm || pickRentM2(cityMarketRef, type, typology);
-        if (rentM2FromCityTable > 0) {
-          loyerPourCalc = Math.round(rentM2FromCityTable * Number(surface));
-          setLoyerEstime(loyerPourCalc);
-        }
+      const rentM2FromCityTable = normalizedMarket.marketRentPerSqm || pickRentM2(cityMarketRef, type, typology);
+      const marketRentMonthly =
+        rentM2FromCityTable > 0 && surface > 0 ? Math.round(rentM2FromCityTable * Number(surface)) : 0;
+
+      // Always prioritize city_market_prices for URL-imported listings.
+      let loyerPourCalc = marketRentMonthly > 0 ? marketRentMonthly : (loyerEstime || 0);
+      if (marketRentMonthly > 0) {
+        setLoyerEstime(marketRentMonthly);
       }
+
       if (!loyerPourCalc) {
         // Keep analysis running with a conservative temporary estimate when market rent is unavailable.
         loyerPourCalc = Math.round((prix * 0.055) / 12);
