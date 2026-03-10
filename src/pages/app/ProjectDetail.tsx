@@ -235,6 +235,16 @@ function cityLookupCandidates(value: string): string[] {
   return Array.from(new Set([cleaned, ...parts]));
 }
 
+function median(values: number[]): number | null {
+  const sorted = values
+    .filter((n) => Number.isFinite(n) && n > 0)
+    .sort((a, b) => a - b);
+  if (!sorted.length) return null;
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) return (sorted[mid - 1] + sorted[mid]) / 2;
+  return sorted[mid];
+}
+
 function parseSelogerLocationFromUrl(rawUrl: string): { city: string | null; departementCode: string | null } {
   try {
     const u = new URL(rawUrl);
@@ -346,6 +356,34 @@ async function fetchCityMarketReference(args: {
 
       const selected = ranked[0]?.row || null;
       if (selected) return selected;
+    }
+  }
+
+  // Last resort, but still from city_market_prices only: departmental medians.
+  if (departementCode) {
+    const { data } = await supabase
+      .from("city_market_prices")
+      .select("*")
+      .eq("departement_code", departementCode)
+      .limit(5000);
+    if (data && data.length > 0) {
+      const m = (key: keyof CityMarketPriceRow) =>
+        median(
+          data
+            .map((r: any) => Number(r?.[key] || 0))
+            .filter((n: number) => Number.isFinite(n) && n > 0),
+        );
+      return {
+        insee_code: null,
+        commune: null,
+        departement_code: departementCode,
+        rent_m2_app_all: m("rent_m2_app_all"),
+        rent_m2_app_t1t2: m("rent_m2_app_t1t2"),
+        rent_m2_app_t3plus: m("rent_m2_app_t3plus"),
+        rent_m2_house: m("rent_m2_house"),
+        sale_m2_all: m("sale_m2_all"),
+        commentaire: "fallback_departement_median_city_market_prices",
+      } as CityMarketPriceRow;
     }
   }
 
