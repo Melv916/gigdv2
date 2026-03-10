@@ -559,15 +559,18 @@ const ProjectDetail = () => {
 
       if (!prix || !surface) {
         const hasUrl = Boolean(url);
+        const safePrix = prix || manualPrix || urlHints.priceHint || 100000;
+        const safeSurface = surface || manualSurface || urlHints.surfaceHint || 40;
+        prix = safePrix;
+        surface = safeSurface;
         toast({
-          title: hasUrl ? "Extraction annonce bloquee" : "Données requises",
+          title: hasUrl ? "Import annonce partiel" : "Données partielles",
           description: hasUrl
-            ? importErrorMessage || "SeLoger bloque la lecture serveur (anti-bot). Active Firecrawl cote Supabase ou saisis prix/surface manuellement."
-            : "Renseignez le prix et la surface.",
-          variant: "destructive",
+            ? (importErrorMessage
+              ? `${importErrorMessage} · Analyse poursuivie avec des valeurs provisoires (${Math.round(safePrix)}€ / ${Math.round(safeSurface)}m²).`
+              : `Analyse poursuivie avec des valeurs provisoires (${Math.round(safePrix)}€ / ${Math.round(safeSurface)}m²).`)
+            : `Analyse poursuivie avec des valeurs provisoires (${Math.round(safePrix)}€ / ${Math.round(safeSurface)}m²).`,
         });
-        setAnalysisStep("idle");
-        return;
       }
 
       if (Boolean(url) && (urlHints.priceHint || urlHints.surfaceHint) && (!listingData?.prix || !listingData?.surface)) {
