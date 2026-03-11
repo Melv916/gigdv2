@@ -34,6 +34,7 @@ import {
   ProjectSettingsPanel,
 } from "@/features/investment/analysis/components/ProjectDetailTopSections";
 import {
+  cleanCityForLookup,
   fetchCityMarketReference,
   inferDepartementCode,
   isValidCityValue,
@@ -302,9 +303,11 @@ const ProjectDetail = () => {
         if (listingData) {
           normalizedProperty = normalizePropertyData(listingData as Record<string, unknown>);
           const inferredFromUrl = parseSelogerLocationFromUrl(url);
-          const cleanedCity = isValidCityValue(String(normalizedProperty.city || listingData?.ville || ""))
-            ? String(normalizedProperty.city || listingData?.ville)
-            : (inferredFromUrl.city || "");
+          const listingCityCandidate = cleanCityForLookup(String(normalizedProperty.city || listingData?.ville || ""));
+          const inferredCityCandidate = cleanCityForLookup(String(inferredFromUrl.city || ""));
+          const cleanedCity = isValidCityValue(listingCityCandidate)
+            ? listingCityCandidate
+            : inferredCityCandidate;
           prix = normalizedProperty.purchasePrice || prix;
           surface = normalizedProperty.surface || surface;
           listingData = {
@@ -325,12 +328,14 @@ const ProjectDetail = () => {
       const listingCodePostal = normalizePostalCode(String(listingData?.codePostal || "").trim());
       const inferredFromUrl = parseSelogerLocationFromUrl(url);
       const isSelogerUrl = /seloger\.com/i.test(String(url || ""));
-      const listingCityRaw = String(listingData?.ville || "").trim();
+      const listingCityRaw = cleanCityForLookup(String(listingData?.ville || "").trim());
+      const manualCityClean = cleanCityForLookup(String(manualCity || "").trim());
+      const inferredCityClean = cleanCityForLookup(String(inferredFromUrl.city || "").trim());
       const listingCity = isValidCityValue(listingCityRaw) ? listingCityRaw : "";
       const cityForLookup =
-        isSelogerUrl && inferredFromUrl.city
-          ? inferredFromUrl.city
-          : (listingCity || manualCity || inferredFromUrl.city || "");
+        isSelogerUrl && isValidCityValue(inferredCityClean)
+          ? inferredCityClean
+          : (listingCity || (isValidCityValue(manualCityClean) ? manualCityClean : "") || inferredCityClean || "");
       const inferredDeptFromUrl = isSelogerUrl ? String(inferredFromUrl.departementCode || "").trim() : "";
       const listingInseeRaw = String((listingData as any)?.insee || "").trim();
       const listingInseeDept = inferDepartementCode({ insee: listingInseeRaw });
@@ -365,7 +370,7 @@ const ProjectDetail = () => {
         normalizedProperty = normalizePropertyData({
           prix,
           surface,
-          ville: listingData?.ville || manualCity || null,
+          ville: listingData?.ville || cityForLookup || null,
           codePostal: listingCodePostal || null,
           insee: (listingData as any)?.insee || null,
           adresse: listingData?.adresse || null,

@@ -22,12 +22,40 @@ function normalizeCity(value: string): string {
     .toLowerCase();
 }
 
+function cleanCityForLookup(value: string): string {
+  return String(value || "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\b\d{5}\b/g, " ")
+    .replace(/\b\d{2,3}\b/g, " ")
+    .replace(/\b\d+(?:er|e|eme)?\s*arr(?:ondissement)?\b/gi, " ")
+    .replace(/\barr(?:ondissement)?\b/gi, " ")
+    .replace(/\bcedex\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildDepartementCandidates(value: string | undefined): string[] {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) return [];
+  if (/^(2A|2B)$/.test(raw)) return [raw];
+  if (/^97\d$/.test(raw)) return [raw];
+  if (/^\d+$/.test(raw)) {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return [raw];
+    if (raw.length === 3 && raw.startsWith("97")) return [raw];
+    const as2 = String(n).padStart(2, "0");
+    const as3 = String(n).padStart(3, "0");
+    return Array.from(new Set([as2, as3]));
+  }
+  return [raw];
+}
+
 async function resolveInseeFromCityAndDepartment(
   city: string | undefined,
   departementCode: string | undefined,
 ): Promise<string | null> {
-  const ville = String(city || "").trim();
-  const dept = String(departementCode || "").trim();
+  const ville = cleanCityForLookup(String(city || "").trim());
+  const deptCandidates = buildDepartementCandidates(departementCode);
   if (!ville) return null;
 
   let query = db
@@ -35,7 +63,7 @@ async function resolveInseeFromCityAndDepartment(
     .select("insee_code,commune,departement_code")
     .limit(5000);
 
-  if (dept) query = query.eq("departement_code", dept);
+  if (deptCandidates.length > 0) query = query.in("departement_code", deptCandidates);
 
   const { data } = await query;
   if (!data || data.length === 0) return null;
@@ -86,10 +114,12 @@ const provider: RentDataProvider = {
 
   async getDepartmentFallback(departementCode, input) {
     // Department fallback remains constrained to city_market_prices.
+    const deptCandidates = buildDepartementCandidates(departementCode);
+    if (deptCandidates.length === 0) return null;
     const { data: cityRows } = await db
       .from("city_market_prices")
       .select("rent_m2_app_all,rent_m2_app_t1t2,rent_m2_app_t3plus,rent_m2_house,loyer_m2_moyen")
-      .eq("departement_code", departementCode)
+      .in("departement_code", deptCandidates)
       .limit(5000);
     if (cityRows && cityRows.length > 0) {
       const values = cityRows
@@ -132,7 +162,8 @@ serve(async (req) => {
     if (req.method === "GET" && route === "/api/rent-estimate") {
       const url = new URL(req.url);
       const city = url.searchParams.get("city") ?? undefined;
-      const depCode = url.searchParams.get("departement_code") ?? undefined;
+      const depCodeRaw = url.searchParams.get("departement_code") ?? undefined;
+      const depCode = buildDepartementCandidates(depCodeRaw)[0] ?? depCodeRaw;
       const inseeFromLocation = await resolveInseeFromCityAndDepartment(city, depCode);
       const input: RentEstimateInput = {
         insee: inseeFromLocation ?? (url.searchParams.get("insee") ?? undefined),

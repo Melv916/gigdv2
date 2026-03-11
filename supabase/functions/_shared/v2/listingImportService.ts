@@ -158,6 +158,47 @@ function fillMissingFromText(listing: ImportedListing, text: string, url: string
   };
 }
 
+function pickValidNumber(
+  values: Array<number | null | undefined>,
+  isValid: (value: number) => boolean,
+): number | undefined {
+  for (const value of values) {
+    const n = typeof value === "number" ? value : null;
+    if (n !== null && Number.isFinite(n) && isValid(n)) return n;
+  }
+  return undefined;
+}
+
+function normalizeListingPayload(
+  listing: ImportedListing,
+  fallback?: ImportedListing | null,
+): ImportedListing {
+  const isValidPrice = (n: number) => n >= 10000 && n <= 10000000;
+  const isValidSurface = (n: number) => n >= 8 && n <= 600;
+  const isValidPieces = (n: number) => n >= 1 && n <= 20;
+
+  const prix = pickValidNumber([listing.prix, fallback?.prix], isValidPrice);
+  const surface = pickValidNumber([listing.surface, fallback?.surface], isValidSurface);
+  const piecesRaw = pickValidNumber(
+    [typeof listing.pieces === "number" ? listing.pieces : undefined, typeof fallback?.pieces === "number" ? fallback.pieces : undefined],
+    isValidPieces,
+  );
+  const pieces = typeof piecesRaw === "number" ? Math.round(piecesRaw) : undefined;
+  const codePostal = /^\d{5}$/.test(String(listing.codePostal || "").trim())
+    ? String(listing.codePostal).trim()
+    : (/^\d{5}$/.test(String(fallback?.codePostal || "").trim()) ? String(fallback?.codePostal).trim() : undefined);
+
+  return {
+    ...listing,
+    prix,
+    surface,
+    pieces,
+    codePostal,
+    ville: sanitizeCity(listing.ville) || sanitizeCity(fallback?.ville),
+    insee: String(listing.insee || "").match(/^\d{5}$/) ? String(listing.insee) : fallback?.insee,
+  };
+}
+
 export async function importListingFromUrl(url: string): Promise<{
   canonicalUrl: string;
   listing: ImportedListing;
@@ -306,6 +347,9 @@ ${markdown.slice(0, 8000)}
   }
   if (listing && markdown && markdown.length >= 60) {
     listing = fillMissingFromText(listing, markdown, canonicalUrl);
+  }
+  if (listing) {
+    listing = normalizeListingPayload(listing, structured);
   }
   console.log("[listingImport] property extracted", {
     prix: listing?.prix ?? null,

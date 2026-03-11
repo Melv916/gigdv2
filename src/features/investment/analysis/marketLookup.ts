@@ -42,6 +42,25 @@ export function normalizePostalCode(value: string): string {
   return String(value || "").replace(/\D/g, "").slice(0, 5);
 }
 
+export function buildDepartementCandidates(value: string): string[] {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) return [];
+
+  if (/^(2A|2B)$/.test(raw)) return [raw];
+  if (/^97\d$/.test(raw)) return [raw];
+
+  if (/^\d+$/.test(raw)) {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return [raw];
+    if (raw.length === 3 && raw.startsWith("97")) return [raw];
+    const as2 = String(n).padStart(2, "0");
+    const as3 = String(n).padStart(3, "0");
+    return Array.from(new Set([as2, as3]));
+  }
+
+  return [raw];
+}
+
 export function cleanCityForLookup(value: string): string {
   return String(value || "")
     .replace(/\([^)]*\)/g, " ")
@@ -112,6 +131,7 @@ export function inferDepartementCode(args: {
 
   const departementCode = String(args.departementCode || "").trim().toUpperCase();
   if (departementCode) {
+    if (/^0\d{2}$/.test(departementCode)) return departementCode.slice(1);
     if (/^\d{3}$/.test(departementCode) && departementCode.startsWith("97")) return departementCode;
     if (/^\d{2}$/.test(departementCode)) return departementCode;
     if (/^(2A|2B)$/.test(departementCode)) return departementCode;
@@ -144,7 +164,8 @@ export async function fetchCityMarketReference(args: {
   const ville = cleanCityForLookup(String(args.ville || "").trim());
   const cityCandidates = cityLookupCandidates(ville);
   const postalCode = normalizePostalCode(String(args.postalCode || "").trim());
-  const departementCode = String(args.departementCode || "").trim();
+  const departementCode = String(args.departementCode || "").trim().toUpperCase();
+  const departementCandidates = buildDepartementCandidates(departementCode);
 
   if (insee) {
     const { data, error } = await supabase
@@ -156,15 +177,15 @@ export async function fetchCityMarketReference(args: {
     if (data) return data as CityMarketPriceRow;
   }
 
-  if (departementCode && cityCandidates.length > 0) {
+  if (departementCandidates.length > 0 && cityCandidates.length > 0) {
     const primaryCity = cityCandidates[0];
     const { data, error } = await supabase
       .from("city_market_prices")
       .select("*")
-      .eq("departement_code", departementCode)
+      .in("departement_code", departementCandidates)
       .ilike("commune", `%${primaryCity}%`)
       .limit(100);
-    warnLookupError("city+departement", error, { primaryCity, departementCode });
+    warnLookupError("city+departement", error, { primaryCity, departementCandidates });
     if (data && data.length > 0) {
       const expected = normalizeCity(primaryCity);
       const exact = data.find((row: unknown) => normalizeCity(String((row as CityMarketPriceRow).commune || "")) === expected);
@@ -173,10 +194,10 @@ export async function fetchCityMarketReference(args: {
     }
   }
 
-  if (cityCandidates.length > 0 || departementCode) {
+  if (cityCandidates.length > 0 || departementCandidates.length > 0) {
     let query = supabase.from("city_market_prices").select("*");
-    if (departementCode) {
-      query = query.eq("departement_code", departementCode).limit(5000);
+    if (departementCandidates.length > 0) {
+      query = query.in("departement_code", departementCandidates).limit(5000);
     } else if (cityCandidates.length > 0) {
       query = query.limit(5000);
     } else {
@@ -184,7 +205,7 @@ export async function fetchCityMarketReference(args: {
     }
 
     const { data, error } = await query;
-    warnLookupError("ranked-scan", error, { departementCode, candidates: cityCandidates });
+    warnLookupError("ranked-scan", error, { departementCandidates, candidates: cityCandidates });
 
     if (data && data.length > 0) {
       const expectedList = cityCandidates.map((city) => normalizeCity(city)).filter(Boolean);
@@ -198,7 +219,8 @@ export async function fetchCityMarketReference(args: {
             else if (expected && communeNorm.startsWith(expected)) score = Math.max(score, 70);
             else if (expected && communeNorm.includes(expected)) score = Math.max(score, 50);
           }
-          if (postalCode && typed.departement_code && postalCode.startsWith(String(typed.departement_code))) score += 20;
+          if (typed.departement_code && departementCandidates.includes(String(typed.departement_code).toUpperCase())) score += 30;
+          if (postalCode && typed.departement_code && postalCode.startsWith(String(typed.departement_code).replace(/^0/, ""))) score += 20;
           if (Number(typed.rent_m2_app_all || typed.loyer_m2_moyen || 0) > 0) score += 10;
           if (Number(typed.sale_m2_all || typed.prix_m2_moyen || 0) > 0) score += 10;
           return { row: typed, score };
@@ -211,13 +233,13 @@ export async function fetchCityMarketReference(args: {
     }
   }
 
-  if (departementCode) {
+  if (departementCandidates.length > 0) {
     const { data, error } = await supabase
       .from("city_market_prices")
       .select("*")
-      .eq("departement_code", departementCode)
+      .in("departement_code", departementCandidates)
       .limit(5000);
-    warnLookupError("departement-median", error, { departementCode });
+    warnLookupError("departement-median", error, { departementCandidates });
     if (data && data.length > 0) {
       const m = (key: keyof CityMarketPriceRow) =>
         median(
@@ -228,7 +250,7 @@ export async function fetchCityMarketReference(args: {
       return {
         insee_code: null,
         commune: null,
-        departement_code: departementCode,
+        departement_code: departementCandidates[0] || null,
         rent_m2_app_all: m("rent_m2_app_all"),
         rent_m2_app_t1t2: m("rent_m2_app_t1t2"),
         rent_m2_app_t3plus: m("rent_m2_app_t3plus"),

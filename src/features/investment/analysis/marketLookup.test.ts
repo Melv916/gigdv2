@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { inferDepartementCode, isValidCityValue, parseSelogerLocationFromUrl, pickRentM2 } from "./marketLookup";
+import {
+  buildDepartementCandidates,
+  inferDepartementCode,
+  isValidCityValue,
+  parseSelogerLocationFromUrl,
+  pickRentM2,
+} from "./marketLookup";
 
 describe("marketLookup helpers", () => {
   it("parses city and departement from SeLoger URL slug", () => {
@@ -14,7 +20,15 @@ describe("marketLookup helpers", () => {
     expect(inferDepartementCode({ postalCode: "91000" })).toBe("91");
     expect(inferDepartementCode({ postalCode: "97100" })).toBe("971");
     expect(inferDepartementCode({ insee: "91228" })).toBe("91");
+    expect(inferDepartementCode({ departementCode: "091" })).toBe("91");
     expect(inferDepartementCode({ insee: "20579", departementCode: "91" })).toBe("91");
+  });
+
+  it("builds robust departement candidates for lookups", () => {
+    expect(buildDepartementCandidates("91")).toEqual(["91", "091"]);
+    expect(buildDepartementCandidates("091")).toEqual(["91", "091"]);
+    expect(buildDepartementCandidates("971")).toEqual(["971"]);
+    expect(buildDepartementCandidates("2A")).toEqual(["2A"]);
   });
 
   it("rejects invalid city values and keeps valid text-only names", () => {
