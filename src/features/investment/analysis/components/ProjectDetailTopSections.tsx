@@ -168,8 +168,8 @@ type AnalysisInputCardProps = {
   onManualPrixChange: (value: number) => void;
   manualSurface: number;
   onManualSurfaceChange: (value: number) => void;
-  manualCP: string;
-  onManualCPChange: (value: string) => void;
+  manualCity: string;
+  onManualCityChange: (value: string) => void;
   travaux: number;
   onTravauxChange: (value: number) => void;
   chargesMensuelles: number;
@@ -231,10 +231,10 @@ export function AnalysisInputCard(props: AnalysisInputCardProps) {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Code postal</Label>
+              <Label className="text-xs">Ville</Label>
               <Input
-                value={props.manualCP}
-                onChange={(e) => props.onManualCPChange(e.target.value)}
+                value={props.manualCity}
+                onChange={(e) => props.onManualCityChange(e.target.value)}
                 className="h-9 border-border/50 bg-muted/30 text-sm"
               />
             </div>

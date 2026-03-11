@@ -198,7 +198,7 @@ const ProjectDetail = () => {
   const [url, setUrl] = useState("");
   const [manualPrix, setManualPrix] = useState<number>(0);
   const [manualSurface, setManualSurface] = useState<number>(0);
-  const [manualCP, setManualCP] = useState("");
+  const [manualCity, setManualCity] = useState("");
   const [travaux, setTravaux] = useState<number>(0);
   const [chargesMensuelles, setChargesMensuelles] = useState<number>(0);
   const [taxeFonciere, setTaxeFonciere] = useState<number>(0);
@@ -322,7 +322,7 @@ const ProjectDetail = () => {
         }
       }
 
-      const listingCodePostal = normalizePostalCode(String(listingData?.codePostal || manualCP || "").trim());
+      const listingCodePostal = normalizePostalCode(String(listingData?.codePostal || "").trim());
       const inferredFromUrl = parseSelogerLocationFromUrl(url);
       const isSelogerUrl = /seloger\.com/i.test(String(url || ""));
       const listingCityRaw = String(listingData?.ville || "").trim();
@@ -330,7 +330,7 @@ const ProjectDetail = () => {
       const cityForLookup =
         isSelogerUrl && inferredFromUrl.city
           ? inferredFromUrl.city
-          : (listingCity || inferredFromUrl.city || "");
+          : (listingCity || manualCity || inferredFromUrl.city || "");
       const inferredDeptFromUrl = isSelogerUrl ? String(inferredFromUrl.departementCode || "").trim() : "";
       const listingInseeRaw = String((listingData as any)?.insee || "").trim();
       const listingInseeDept = inferDepartementCode({ insee: listingInseeRaw });
@@ -365,7 +365,7 @@ const ProjectDetail = () => {
         normalizedProperty = normalizePropertyData({
           prix,
           surface,
-          ville: listingData?.ville || null,
+          ville: listingData?.ville || manualCity || null,
           codePostal: listingCodePostal || null,
           insee: (listingData as any)?.insee || null,
           adresse: listingData?.adresse || null,
@@ -523,8 +523,8 @@ const ProjectDetail = () => {
           surface,
           pieces: listingData?.pieces || null,
           type_local: listingData?.typeLocal || null,
-          code_postal: listingData?.codePostal || manualCP || null,
-          ville: listingData?.ville || null,
+          code_postal: listingData?.codePostal || null,
+          ville: listingData?.ville || manualCity || null,
           dpe: listingData?.dpe || null,
           charges_mensuelles: chargesMensuelles,
           taxe_fonciere: taxeFonciere,
@@ -801,8 +801,8 @@ const ProjectDetail = () => {
             onManualPrixChange={setManualPrix}
             manualSurface={manualSurface}
             onManualSurfaceChange={setManualSurface}
-            manualCP={manualCP}
-            onManualCPChange={setManualCP}
+            manualCity={manualCity}
+            onManualCityChange={setManualCity}
             travaux={travaux}
             onTravauxChange={setTravaux}
             chargesMensuelles={chargesMensuelles}
