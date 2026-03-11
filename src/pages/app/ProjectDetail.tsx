@@ -16,7 +16,7 @@ import {
   type ProjectParams,
   type Projection,
 } from "@/lib/calculations";
-import { createAnalysis, getMe, importAnalysisUrl } from "@/lib/v2/api";
+import { importAnalysisUrl } from "@/lib/v2/api";
 import { fetchRentEstimate } from "@/lib/investment/api";
 import {
   buildMarketData,
@@ -210,9 +210,6 @@ const ProjectDetail = () => {
   const [listing, setListing] = useState<any>(null);
   const [aiResult, setAiResult] = useState<AnalysisResult | null>(null);
   const [analysisStep, setAnalysisStep] = useState<"idle" | "scraping" | "analyzing" | "done">("idle");
-  const [v2AnalysisText, setV2AnalysisText] = useState("");
-  const [cacheHit, setCacheHit] = useState(false);
-  const [iaMode, setIaMode] = useState<"courte" | "complete">("courte");
   const [marketStatus, setMarketStatus] = useState<"ok" | "processing" | "failed" | "indisponible">("indisponible");
   const [marketData, setMarketData] = useState<MarketData | null>(null);
   const [propertyData, setPropertyData] = useState<PropertyData | null>(null);
@@ -239,15 +236,6 @@ const ProjectDetail = () => {
         setLoading(false);
       });
   }, [user, id]);
-
-  useEffect(() => {
-    if (!user) return;
-    getMe()
-      .then((data) => {
-        setIaMode(data?.iaModeAllowed === "complete" ? "complete" : "courte");
-      })
-      .catch(() => undefined);
-  }, [user]);
 
   // Load saved analyses
   useEffect(() => {
@@ -286,8 +274,6 @@ const ProjectDetail = () => {
     if (!project || !params) return;
     setAnalysisStep("scraping");
     setAiResult(null);
-    setV2AnalysisText("");
-    setCacheHit(false);
     setMarketStatus("indisponible");
     setMarketData(null);
     setPropertyData(null);
@@ -511,49 +497,6 @@ const ProjectDetail = () => {
       });
 
       setAiResult(fallbackAnalysis);
-
-      // V2 AI synthesis in addition to V1 analysis (no replacement).
-      try {
-        const strategyMap: Record<string, "nue" | "meuble" | "colocation" | "lcd"> = {
-          "ld-nue": "nue",
-          meuble: "meuble",
-          coloc: "colocation",
-          lcd: "lcd",
-        };
-        const v2 = await createAnalysis({
-          url: url || `manual://${Date.now()}`,
-          strategy: strategyMap[project.strategie] || "nue",
-          mode: iaMode,
-          inputs: {
-            travaux,
-            charges_mensuelles: chargesMensuelles,
-            taxe_fonciere: taxeFonciere,
-            autres_couts: autresCouts,
-            vacance_mois: params.vacance_locative,
-            strategie: strategyMap[project.strategie] || "nue",
-            prix,
-            surface,
-            loyer_estime: loyerPourCalc,
-            mensualite_totale: mensualiteTotaleLocal,
-            prompt_version: "v3",
-          },
-          importData: {
-            listing: listingData || {
-              titre: "Saisie manuelle",
-              prix,
-              surface,
-              codePostal: manualCP || null,
-              vendeur: "inconnu",
-              typeLocal: "Appartement",
-            },
-            dvfSummary: marketSummary || {},
-          },
-        });
-        setV2AnalysisText(String(v2?.analysis?.analysis_text || ""));
-        setCacheHit(Boolean(v2?.cacheHit));
-      } catch {
-        // Keep V1 result available even if V2 synthesis fails.
-      }
 
       // Calculate projections locally
       const projs = calcProjections(params, prix, loyerPourCalc, chargesMensuelles, taxeFonciere, travaux, autresCouts);
@@ -794,6 +737,9 @@ const ProjectDetail = () => {
     },
     ...projectionChartData,
   ].sort((a, b) => a.annee - b.annee);
+  const cashflowPositive = cashFlowMensuelNum > 0;
+  const selectedSeuilCashflowZero =
+    seuilTypes.find((s) => s.type === project.strategie)?.seuil ?? 0;
 
   const renderProjectionTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -989,17 +935,27 @@ const ProjectDetail = () => {
             </div>
           )}
 
-          {/* V2 synthesis appended to V1 experience */}
-          {v2AnalysisText && (
+          {/* Deterministic analysis synthesis (no AI call) */}
+          {aiResult && (
             <div className="analysis-cockpit-card p-6 mt-6">
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <h3 className="text-sm font-semibold text-foreground">Synthèse IA V2</h3>
-                <span className="text-[10px] text-muted-foreground">
-                  Mode {iaMode} · {cacheHit ? "Cache hit" : "Générée"}
-                </span>
-              </div>
-              <div className="analysis-v2-text rounded-lg p-5 text-sm text-foreground whitespace-pre-wrap leading-8">
-                {v2AnalysisText}
+              <h3 className="text-sm font-semibold text-foreground mb-3">Synthèse d'analyse</h3>
+              <div className="analysis-v2-text rounded-lg p-5 text-sm text-foreground leading-7 space-y-2">
+                <p>Voici le resume d'analyse du bien.</p>
+                <p>
+                  Par consequent, pour un cash-flow = 0, il faudrait un loyer de{" "}
+                  <span className="text-primary font-semibold">{formatEUR(selectedSeuilCashflowZero)}/mois</span>.
+                </p>
+                <p>
+                  Actuellement, votre cash-flow est de{" "}
+                  <span className={cashflowPositive ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
+                    {formatEUR(cashFlowMensuelNum)}/mois
+                  </span>.
+                </p>
+                <p className={cashflowPositive ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
+                  {cashflowPositive
+                    ? "C'est donc un bon investissement."
+                    : "Ce n'est pas un bon placement sans negociation."}
+                </p>
               </div>
             </div>
           )}
