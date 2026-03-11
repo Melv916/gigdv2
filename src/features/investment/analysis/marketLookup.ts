@@ -110,13 +110,19 @@ export function inferDepartementCode(args: {
     return postalCode.slice(0, 2);
   }
 
+  const departementCode = String(args.departementCode || "").trim().toUpperCase();
+  if (departementCode) {
+    if (/^\d{3}$/.test(departementCode) && departementCode.startsWith("97")) return departementCode;
+    if (/^\d{2}$/.test(departementCode)) return departementCode;
+    if (/^(2A|2B)$/.test(departementCode)) return departementCode;
+  }
+
   const insee = normalizeInsee(String(args.insee || "").trim());
   if (insee) {
     if (/^97\d/.test(insee)) return insee.slice(0, 3);
     return insee.slice(0, 2);
   }
-
-  return String(args.departementCode || "").trim();
+  return "";
 }
 
 function warnLookupError(step: string, error: unknown, context: Record<string, unknown>) {

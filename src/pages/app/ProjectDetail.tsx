@@ -345,21 +345,32 @@ const ProjectDetail = () => {
         isSelogerUrl && inferredFromUrl.city
           ? inferredFromUrl.city
           : (listingCity || inferredFromUrl.city || "");
+      const inferredDeptFromUrl = isSelogerUrl ? String(inferredFromUrl.departementCode || "").trim() : "";
+      const listingInseeRaw = String((listingData as any)?.insee || "").trim();
+      const listingInseeDept = inferDepartementCode({ insee: listingInseeRaw });
+      const postalCodeForLookup =
+        inferredDeptFromUrl && listingCodePostal && !listingCodePostal.startsWith(inferredDeptFromUrl)
+          ? ""
+          : listingCodePostal;
+      const inseeForLookup =
+        inferredDeptFromUrl && listingInseeDept && listingInseeDept !== inferredDeptFromUrl
+          ? ""
+          : listingInseeRaw;
       const listingDepartementCode = inferDepartementCode({
-        postalCode: listingCodePostal,
-        insee: String((listingData as any)?.insee || "").trim(),
-        departementCode: String((listingData as any)?.departementCode || inferredFromUrl.departementCode || "").trim(),
+        postalCode: postalCodeForLookup,
+        insee: inseeForLookup,
+        departementCode: String((listingData as any)?.departementCode || inferredDeptFromUrl || "").trim(),
       });
       cityMarketRef = await fetchCityMarketReference({
-        insee: String((listingData as any)?.insee || "").trim(),
+        insee: inseeForLookup,
         ville: cityForLookup,
-        postalCode: listingCodePostal,
+        postalCode: postalCodeForLookup,
         departementCode: listingDepartementCode,
       });
       console.log("[analysis] city_market_prices lookup", {
-        insee: String((listingData as any)?.insee || "").trim() || null,
+        insee: inseeForLookup || null,
         ville: cityForLookup || null,
-        postalCode: listingCodePostal || null,
+        postalCode: postalCodeForLookup || null,
         departementCode: listingDepartementCode || null,
         found: Boolean(cityMarketRef),
       });
@@ -427,9 +438,28 @@ const ProjectDetail = () => {
           : 0;
       const mensualiteTotaleLocal = mensualiteCreditLocal + assuranceMensuelleLocal;
 
-      const rentM2FromCityTable = normalizedMarket.marketRentPerSqm || pickRentM2(cityMarketRef, type, typology);
+      const rentM2FromCityTable =
+        type === "house"
+          ? Number(
+              cityMarketRef?.rent_m2_house ||
+              cityMarketRef?.rent_m2_app_all ||
+              normalizedMarket.marketRentPerSqm ||
+              pickRentM2(cityMarketRef, type, typology) ||
+              0,
+            )
+          : Number(
+              cityMarketRef?.rent_m2_app_all ||
+              normalizedMarket.marketRentPerSqm ||
+              pickRentM2(cityMarketRef, type, typology) ||
+              0,
+            );
       const marketRentMonthly =
         rentM2FromCityTable > 0 && surface > 0 ? Math.round(rentM2FromCityTable * Number(surface)) : 0;
+      console.log("[analysis] market rent computation", {
+        rentM2FromCityTable,
+        surface,
+        marketRentMonthly,
+      });
 
       // Always prioritize city_market_prices for URL-imported listings.
       let loyerPourCalc = marketRentMonthly > 0 ? marketRentMonthly : (loyerEstime || 0);

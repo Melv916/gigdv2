@@ -14,6 +14,7 @@ describe("marketLookup helpers", () => {
     expect(inferDepartementCode({ postalCode: "91000" })).toBe("91");
     expect(inferDepartementCode({ postalCode: "97100" })).toBe("971");
     expect(inferDepartementCode({ insee: "91228" })).toBe("91");
+    expect(inferDepartementCode({ insee: "20579", departementCode: "91" })).toBe("91");
   });
 
   it("rejects invalid city values and keeps valid text-only names", () => {
