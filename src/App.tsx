@@ -20,6 +20,11 @@ import ProjectDetail from "./pages/app/ProjectDetail";
 import Account from "./pages/app/Account";
 import Subscription from "./pages/app/Subscription";
 import Advanced from "./pages/app/Advanced";
+import Contact from "./pages/Contact";
+import About from "./pages/About";
+import Method from "./pages/Method";
+import Resources from "./pages/Resources";
+import SeoArticlePage from "./pages/SeoArticlePage";
 
 const queryClient = new QueryClient();
 
@@ -36,7 +41,19 @@ const App = () => (
             <Route path="/tarifs" element={<Tarifs />} />
             <Route path="/faq" element={<FAQ />} />
             <Route path="/mentions-legales" element={<MentionsLegales />} />
+            <Route path="/politique-confidentialite" element={<Confidentialite />} />
             <Route path="/confidentialite" element={<Confidentialite />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/a-propos" element={<About />} />
+            <Route path="/methode" element={<Method />} />
+            <Route path="/ressources" element={<Resources />} />
+            <Route path="/calcul-rentabilite-locative" element={<SeoArticlePage />} />
+            <Route path="/cash-flow-immobilier" element={<SeoArticlePage />} />
+            <Route path="/analyser-une-annonce-immobiliere" element={<SeoArticlePage />} />
+            <Route path="/estimation-loyer" element={<SeoArticlePage />} />
+            <Route path="/prix-m2" element={<SeoArticlePage />} />
+            <Route path="/frais-notaire" element={<SeoArticlePage />} />
+            <Route path="/sci-ou-nom-propre" element={<SeoArticlePage />} />
             <Route path="/cgu" element={<CGU />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/app" element={<Dashboard />} />

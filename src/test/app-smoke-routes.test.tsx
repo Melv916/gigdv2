@@ -179,7 +179,7 @@ function renderRoute(path: string) {
 describe("App Smoke Routes", () => {
   it("renders landing page", async () => {
     renderRoute("/");
-    expect(await screen.findByText(/tes decisions d'investisseur/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Analysez un bien locatif/i)).toBeInTheDocument();
   });
 
   it("renders product page", async () => {
@@ -201,6 +201,28 @@ describe("App Smoke Routes", () => {
     renderRoute("/mentions-legales");
     expect(await screen.findByRole("heading", { name: /Mentions legales/i })).toBeInTheDocument();
     expect((await screen.findAllByText(/contact@gigd.fr/i)).length).toBeGreaterThan(0);
+  });
+
+  it("renders contact page", async () => {
+    renderRoute("/contact");
+    expect(await screen.findByRole("heading", { name: /Une question produit/i })).toBeInTheDocument();
+  });
+
+  it("renders method page", async () => {
+    renderRoute("/methode");
+    expect(await screen.findByRole("heading", { name: /Comment GIGD construit une analyse utile/i })).toBeInTheDocument();
+  });
+
+  it("renders resources page", async () => {
+    renderRoute("/ressources");
+    expect(await screen.findByRole("heading", { name: /Guides pratiques pour investisseur locatif/i })).toBeInTheDocument();
+  });
+
+  it("renders a seo article page", async () => {
+    renderRoute("/cash-flow-immobilier");
+    expect(
+      await screen.findByRole("heading", { level: 1, name: /Comprendre le cash-flow immobilier/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders dashboard page", async () => {

@@ -1,4 +1,5 @@
-﻿import { PageLayout } from "@/components/layout/PageLayout";
+import { PageLayout } from "@/components/layout/PageLayout";
+import { Seo } from "@/components/seo/Seo";
 import { motion } from "framer-motion";
 import { Link2, Target, BarChart3, AlertTriangle, FileText, MessageSquare, Download, Settings } from "lucide-react";
 
@@ -15,6 +16,11 @@ const steps = [
 const Produit = () => {
   return (
     <PageLayout>
+      <Seo
+        title="Produit GIGD"
+        description="Fonctionnalites de GIGD pour importer une annonce, analyser un bien locatif et lire les KPI utiles a la decision."
+        pathname="/produit"
+      />
       <section className="py-24">
         <div className="container">
           <motion.div

@@ -1,4 +1,5 @@
-﻿import { PageLayout } from "@/components/layout/PageLayout";
+import { PageLayout } from "@/components/layout/PageLayout";
+import { Seo } from "@/components/seo/Seo";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Check, ArrowRight } from "lucide-react";
@@ -65,6 +66,11 @@ const Tarifs = () => {
 
   return (
     <PageLayout>
+      <Seo
+        title="Tarifs GIGD"
+        description="Consultez les formules GIGD pour analyser des opportunites d'investissement locatif."
+        pathname="/tarifs"
+      />
       <section className="py-24">
         <div className="container">
           <motion.div

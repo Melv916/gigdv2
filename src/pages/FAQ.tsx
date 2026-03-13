@@ -1,4 +1,4 @@
-﻿import { PageLayout } from "@/components/layout/PageLayout";
+import { PageLayout } from "@/components/layout/PageLayout";
 import { motion } from "framer-motion";
 import {
   Accordion,
@@ -7,6 +7,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { faqs as baseFaqs } from "@/components/landing/FAQSection";
+import { Seo } from "@/components/seo/Seo";
 
 const extraFaqs = [
   {
@@ -24,6 +25,11 @@ const allFaqs = [...baseFaqs, ...extraFaqs];
 const FAQ = () => {
   return (
     <PageLayout>
+      <Seo
+        title="FAQ GIGD"
+        description="Questions frequentes sur GIGD, le fonctionnement des analyses, les donnees et l'utilisation du produit."
+        pathname="/faq"
+      />
       <section className="py-24">
         <div className="container">
           <motion.div

@@ -1,20 +1,17 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { motion, AnimatePresence } from "framer-motion";
-
-const navLinks = [
-  { label: "Produit", to: "/produit" },
-  { label: "Tarifs", to: "/tarifs" },
-  { label: "FAQ", to: "/faq" },
-];
+import { Button } from "@/components/ui/button";
+import { getAnalysisCtaPath, primaryNavLinks } from "@/lib/site";
+import { trackEvent } from "@/lib/tracking";
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const { user } = useAuth();
+  const ctaHref = getAnalysisCtaPath(Boolean(user));
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/75 backdrop-blur-xl">
@@ -28,8 +25,8 @@ export function Header() {
           </span>
         </Link>
 
-        <nav className="hidden md:flex items-center gap-1 bg-muted/20 border border-border/40 rounded-full p-1">
-          {navLinks.map((link) => (
+        <nav className="hidden md:flex items-center gap-1 rounded-full border border-border/40 bg-muted/20 p-1">
+          {primaryNavLinks.map((link) => (
             <Link
               key={link.to}
               to={link.to}
@@ -45,9 +42,12 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <Link to={user ? "/app" : "/auth"}>
+          <Link
+            to={ctaHref}
+            onClick={() => trackEvent("click_cta_primary", { location: "header", target: ctaHref })}
+          >
             <Button variant="hero-outline" size="sm" className="hidden md:inline-flex">
-              {user ? "Mon espace" : "Connexion"}
+              {user ? "Mon espace" : "Lancer une analyse"}
             </Button>
           </Link>
           <button
@@ -69,7 +69,7 @@ export function Header() {
             className="md:hidden glass-card border-t border-border/30 overflow-hidden"
           >
             <nav className="container py-4 flex flex-col gap-2">
-              {navLinks.map((link) => (
+              {primaryNavLinks.map((link) => (
                 <Link
                   key={link.to}
                   to={link.to}
@@ -83,9 +83,12 @@ export function Header() {
                   {link.label}
                 </Link>
               ))}
-              <Link to={user ? "/app" : "/auth"}>
+              <Link
+                to={ctaHref}
+                onClick={() => trackEvent("click_cta_primary", { location: "header-mobile", target: ctaHref })}
+              >
                 <Button variant="hero-outline" size="sm" className="mt-2 w-fit">
-                  {user ? "Mon espace" : "Connexion"}
+                  {user ? "Mon espace" : "Lancer une analyse"}
                 </Button>
               </Link>
             </nav>
@@ -95,4 +98,3 @@ export function Header() {
     </header>
   );
 }
-

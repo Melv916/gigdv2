@@ -105,6 +105,22 @@
   padding: 3rem 1.3rem 2.2rem;
 }
 
+.v2home-kicker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.5rem 0.85rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #d5e5ff;
+}
+
 .v2home-card {
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -268,6 +284,33 @@
   overflow: hidden;
 }
 
+.v2home-mobile-chip {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.8rem 0.9rem;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #dce8ff;
+}
+
+.v2home-mobile-link {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.8rem 0.9rem;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f3f7ff;
+  text-align: center;
+  text-decoration: none;
+}
+
+.v2home-mobile-link:hover {
+  border-color: rgba(47, 140, 255, 0.45);
+  background: rgba(47, 140, 255, 0.12);
+}
+
 @media (max-width: 1024px) {
   .v2home-workspace {
     grid-template-columns: 56px 1fr;
@@ -290,11 +333,19 @@
   }
 
   .v2home-stage-hero {
-    padding: 2.3rem 0.95rem 1.6rem;
+    padding: 2.05rem 0.95rem 1.35rem;
+  }
+
+  .v2home-kicker {
+    padding: 0.42rem 0.72rem;
+    font-size: 10px;
+    letter-spacing: 0.15em;
   }
 
   .v2home-input-shell {
     flex-wrap: wrap;
+    gap: 0.45rem;
+    padding: 0.45rem;
   }
 
   .v2home-cta-btn {
@@ -305,17 +356,41 @@
   .v2home-workspace {
     margin: 0 0.75rem 0.75rem;
     grid-template-columns: 1fr;
+    min-height: auto;
   }
 
   .v2home-workspace-left {
-    border-right: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    flex-direction: row;
-    padding: 0.65rem;
+    display: none;
   }
 
   .v2home-workspace-main {
     border-right: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 0.9rem;
+  }
+
+  .v2home-workspace-head {
+    padding-bottom: 0.6rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .v2home-chat-card {
+    padding: 0.7rem;
+  }
+
+  .v2home-workspace-right {
+    display: none;
+  }
+
+  .v2home-section-shell {
+    border-radius: 16px;
+  }
+
+  .v2home-content-stack {
+    padding-top: 2.5rem;
+    padding-bottom: 2.5rem;
+  }
+
+  .v2home-content-stack > .v2home-section-shell {
+    margin-top: 0;
   }
 }

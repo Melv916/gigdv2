@@ -1,10 +1,12 @@
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Lightbulb, Eye, ShieldCheck } from "lucide-react";
+import { Lightbulb, Eye, ShieldCheck, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const methods = [
-  { icon: Lightbulb, title: "Clarté", desc: "Des calculs expliqués, sans jargon inutile." },
-  { icon: Eye, title: "Transparence", desc: "Hypothèses visibles, sources indiquées, méthode versionnée." },
-  { icon: ShieldCheck, title: "Responsabilité", desc: "GIGD est une aide à la décision : il met en évidence ce qui doit être vérifié avant tout engagement." },
+  { icon: Lightbulb, title: "Clarte", desc: "Des calculs expliques, sans jargon inutile et avec une lecture orientee decision." },
+  { icon: Eye, title: "Transparence", desc: "Hypotheses visibles, sources indiquees et methode consultable depuis le site." },
+  { icon: ShieldCheck, title: "Responsabilite", desc: "GIGD aide a prioriser ce qui doit etre verifie avant toute offre ou engagement." },
 ];
 
 export function MethodSection() {
@@ -17,7 +19,7 @@ export function MethodSection() {
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <span className="text-xs font-semibold uppercase tracking-wider text-primary">Notre méthode</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-primary">Notre methode</span>
           <h2 className="mt-3 text-3xl md:text-4xl font-display font-bold text-foreground">
             Une approche rigoureuse et ouverte
           </h2>
@@ -40,10 +42,13 @@ export function MethodSection() {
             </motion.div>
           ))}
         </div>
-        <div className="text-center mt-8">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border border-secondary/30 text-secondary bg-secondary/5">
-            Méthode v0.1
-          </span>
+        <div className="mt-8 text-center">
+          <Link to="/methode">
+            <Button variant="hero-outline">
+              Lire la methode complete
+              <ArrowRight />
+            </Button>
+          </Link>
         </div>
       </div>
     </section>

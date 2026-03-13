@@ -1,28 +1,30 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { SocialProofSection } from "@/components/landing/SocialProofSection";
-import { ProblemSection } from "@/components/landing/ProblemSection";
-import { SolutionSection } from "@/components/landing/SolutionSection";
-import { PillarsSection } from "@/components/landing/PillarsSection";
-import { MissionSection } from "@/components/landing/MissionSection";
-import { MethodSection } from "@/components/landing/MethodSection";
-import { ComparisonSection } from "@/components/landing/ComparisonSection";
-import { LevelsSection } from "@/components/landing/LevelsSection";
-import { DashboardMock } from "@/components/landing/DashboardMock";
-import { FAQSection } from "@/components/landing/FAQSection";
-import { WaitlistForm } from "@/components/landing/WaitlistForm";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
+import { Seo } from "@/components/seo/Seo";
 import { useAuth } from "@/hooks/useAuth";
-import {
-  Search,
-  ArrowRight,
-  MessageSquareText,
-  Database,
-  Users,
-  ChevronRight,
-} from "lucide-react";
+import { getAnalysisCtaPath, primaryNavLinks, SITE_NAME, SITE_URL } from "@/lib/site";
+import { trackEvent } from "@/lib/tracking";
+import { Search, ArrowRight } from "lucide-react";
 import "./index-home.css";
+
+const demoProperty = {
+  title: "T2 renove pour location longue duree",
+  city: "Lille Centre",
+  surface: "42 m2",
+  price: "164 000 EUR",
+  rent: "820 EUR / mois",
+  yield: "5,4 %",
+  cashFlow: "+74 EUR / mois",
+  marketGap: "+3,8 % vs marche local",
+};
+
+const demoHighlights = [
+  "Travaux legers, dossier simple a exploiter",
+  "Loyer coherent avec le secteur retenu",
+  "Prix legerement au-dessus du marche, marge de nego limitee",
+];
 
 const Index = () => {
   const navigate = useNavigate();
@@ -31,15 +33,53 @@ const Index = () => {
 
   const launchHref = useMemo(() => {
     const nextUrl = encodeURIComponent(listingUrl.trim());
-    return user ? `/app/projets/nouveau${nextUrl ? `?url=${nextUrl}` : ""}` : "/auth";
+    return user ? `/app/projets/nouveau${nextUrl ? `?url=${nextUrl}` : ""}` : getAnalysisCtaPath(false);
   }, [listingUrl, user]);
 
+  const secondaryHref = useMemo(() => "/methode", []);
+  const defaultAnalysisHref = useMemo(() => getAnalysisCtaPath(Boolean(user)), [user]);
+
   const onAnalyze = () => {
+    trackEvent("click_cta_primary", { location: "home-hero", target: launchHref });
+    trackEvent("start_analysis", { location: "home-hero", hasPrefilledUrl: Boolean(listingUrl.trim()) });
     navigate(launchHref);
   };
 
   return (
     <div className="v2home-root min-h-screen flex flex-col">
+      <Seo
+        title="Analyse investissement locatif"
+        description="GIGD aide a analyser une annonce immobiliere, comprendre la rentabilite, le cash-flow et les points a verifier avant decision."
+        pathname="/"
+        structuredData={[
+          {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: SITE_NAME,
+            url: SITE_URL,
+            email: "contact@gigd.fr",
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            name: SITE_NAME,
+            url: SITE_URL,
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: SITE_NAME,
+            applicationCategory: "BusinessApplication",
+            operatingSystem: "Web",
+            offers: {
+              "@type": "Offer",
+              price: "0",
+              priceCurrency: "EUR",
+            },
+          },
+        ]}
+      />
+
       <main className="flex-1">
         <section className="v2home-showcase">
           <div className="container py-6 md:py-10">
@@ -54,9 +94,11 @@ const Index = () => {
                 </Link>
 
                 <nav className="v2home-stage-nav hidden md:flex">
-                  <Link to="/produit" className="v2home-stage-navlink">Produit</Link>
-                  <Link to="/tarifs" className="v2home-stage-navlink">Tarifs</Link>
-                  <Link to="/faq" className="v2home-stage-navlink">FAQ</Link>
+                  {primaryNavLinks.slice(0, 5).map((link) => (
+                    <Link key={link.to} to={link.to} className="v2home-stage-navlink">
+                      {link.label}
+                    </Link>
+                  ))}
                 </nav>
 
                 <Link to={user ? "/app" : "/auth"}>
@@ -65,14 +107,22 @@ const Index = () => {
               </header>
 
               <div className="v2home-stage-hero">
-                <h1 className="mt-4 text-4xl md:text-6xl font-display font-bold leading-[1.05] text-white">
-                  L'interface qui structure
+                <h1 className="mt-4 text-4xl md:text-6xl font-display font-bold leading-[1.02] text-white">
+                  Ne devinez plus,
                   <br />
-                  <span className="v2home-headline-accent">tes decisions d'investisseur.</span>
+                  <span className="v2home-headline-accent">soyez surs.</span>
                 </h1>
 
-                <p className="mt-5 text-base md:text-lg text-slate-300 max-w-2xl mx-auto">
-                  Importe une annonce. GIGD fait le reste.
+                <p className="mt-5 text-base md:text-xl text-white/90 max-w-3xl mx-auto">
+                  Analysez un bien locatif avant visite, offre ou arbitrage.
+                </p>
+
+                <p className="mt-4 hidden max-w-3xl mx-auto text-base leading-8 text-slate-300 md:block">
+                  GIGD transforme une annonce ou une saisie de bien en lecture claire du rendement, du cash-flow, du
+                  loyer cible, du prix au m2 et des points de vigilance decisifs.
+                </p>
+                <p className="mt-4 max-w-sm mx-auto text-sm leading-6 text-slate-300 md:hidden">
+                  GIGD vous aide a savoir rapidement si une annonce tient vraiment, sans bruit inutile.
                 </p>
 
                 <div className="mt-7 v2home-input-shell max-w-3xl mx-auto">
@@ -90,92 +140,132 @@ const Index = () => {
                   </Button>
                 </div>
 
-                <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-3xl mx-auto">
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                  <Link
+                    to={secondaryHref}
+                    onClick={() => trackEvent("click_cta_secondary", { location: "home-hero", target: secondaryHref })}
+                  >
+                    <Button variant="hero-outline" size="sm">Comprendre la methode</Button>
+                  </Link>
+                  <Link
+                    to={defaultAnalysisHref}
+                    className="text-sm text-slate-300 hover:text-white"
+                    onClick={() => trackEvent("click_cta_secondary", { location: "home-hero-text", target: defaultAnalysisHref })}
+                  >
+                    Ouvrir l'application sans URL
+                  </Link>
+                </div>
+
+                <div className="mt-5 grid gap-2 text-left md:hidden max-w-sm mx-auto">
+                  <div className="v2home-mobile-chip">Lecture directe du rendement, du cash-flow et du marche.</div>
+                  <div className="v2home-mobile-chip">Pense pour passer vite de l'annonce a la decision.</div>
+                </div>
+
+                <div className="mt-6 hidden max-w-3xl mx-auto gap-3 md:grid md:grid-cols-3">
                   {[
-                    { label: "Confiance loyer", value: "84/100" },
+                    { label: "Prix au m2 compare", value: "3 690 EUR/m2" },
                     { label: "Cash-flow net-net", value: "+162 EUR/mois" },
-                    { label: "TRI projet", value: "11.2%" },
-                  ].map((s) => (
-                    <div key={s.label} className="v2home-card v2home-card-secondary p-4 text-left">
-                      <p className="v2home-label">{s.label}</p>
-                      <p className="mt-2 text-lg font-semibold text-white">{s.value}</p>
+                    { label: "Loyer estime prudent", value: "1 180 EUR/mois" },
+                  ].map((stat) => (
+                    <div key={stat.label} className="v2home-card v2home-card-secondary p-4 text-left">
+                      <p className="v2home-label">{stat.label}</p>
+                      <p className="mt-2 text-lg font-semibold text-white">{stat.value}</p>
                     </div>
                   ))}
                 </div>
               </div>
-
-              <section className="v2home-workspace">
-                <aside className="v2home-workspace-left">
-                  <Link to="/produit#exemple-nego" className="v2home-iconbtn" aria-label="Exemple script de negociation">
-                    <MessageSquareText size={14} />
-                  </Link>
-                  <Link to="/produit#exemple-database" className="v2home-iconbtn" aria-label="Exemple base de donnees">
-                    <Database size={14} />
-                  </Link>
-                  <Link to="/produit#exemple-risque" className="v2home-iconbtn" aria-label="Exemple analyse de risque">
-                    <Users size={14} />
-                  </Link>
-                </aside>
-
-                <div className="v2home-workspace-main">
-                  <div className="v2home-workspace-head">
-                    <p className="text-sm text-foreground font-semibold">Core Team - Deal review</p>
-                    <span className="text-xs text-muted-foreground">Canal prioritaire</span>
-                  </div>
-                  <div className="v2home-chat-stack">
-                    <div className="v2home-chat-card">
-                      <p className="text-xs text-muted-foreground">Ari - 11:14</p>
-                      <p className="text-sm text-foreground mt-1">
-                        Le prix affiche doit descendre de 20k pour tenir notre DSCR cible.
-                      </p>
-                    </div>
-                    <div className="v2home-chat-card">
-                      <p className="text-xs text-muted-foreground">Tejas - 11:19</p>
-                      <p className="text-sm text-foreground mt-1">
-                        OK, on envoie un script de nego base sur les risques DPE et charges copro.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <aside className="v2home-workspace-right">
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Quick access</p>
-                  <div className="mt-2 space-y-2">
-                    <Link to="/produit#exemple-database" className="v2home-side-row">
-                      <span>Database</span>
-                      <ChevronRight size={14} />
-                    </Link>
-                    <Link to="/produit#exemple-api" className="v2home-side-row">
-                      <span>API Collections</span>
-                      <ChevronRight size={14} />
-                    </Link>
-                    <Link to="/produit#exemple-nego" className="v2home-side-row">
-                      <span>Scripts de nego</span>
-                      <ChevronRight size={14} />
-                    </Link>
-                    <Link to="/produit#exemple-risque" className="v2home-side-row">
-                      <span>Analyse risque</span>
-                      <ChevronRight size={14} />
-                    </Link>
-                  </div>
-                </aside>
-              </section>
             </div>
           </div>
         </section>
 
-        <div className="container py-14 space-y-14">
-          <section className="v2home-section-shell"><DashboardMock /></section>
-          <section className="v2home-section-shell"><SocialProofSection /></section>
-          <section className="v2home-section-shell"><ProblemSection /></section>
-          <section className="v2home-section-shell"><SolutionSection /></section>
-          <section className="v2home-section-shell"><PillarsSection /></section>
-          <section className="v2home-section-shell"><MissionSection /></section>
-          <section className="v2home-section-shell"><MethodSection /></section>
-          <section className="v2home-section-shell"><ComparisonSection /></section>
-          <section className="v2home-section-shell"><LevelsSection /></section>
-          <section className="v2home-section-shell"><FAQSection /></section>
-          <section className="v2home-section-shell"><WaitlistForm /></section>
+        <div className="container v2home-content-stack py-12 md:py-16">
+          <section className="v2home-section-shell v2home-essentials">
+            <div className="grid gap-8 px-5 py-6 md:grid-cols-[minmax(0,1.2fr)_0.8fr] md:px-8 md:py-8">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Simulation de demonstration</p>
+                <h2 className="mt-3 text-2xl font-display font-bold text-foreground md:text-4xl">
+                  Un exemple concret de lecture GIGD
+                </h2>
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground md:text-base">
+                  Exemple fige, purement demonstratif, pour montrer comment une annonce peut etre lue sans dependance a
+                  une donnee en direct.
+                </p>
+
+                <div className="mt-6 rounded-[1.5rem] border border-border/50 bg-card/60 p-5 md:p-6">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                      {demoProperty.city}
+                    </span>
+                    <span className="rounded-full border border-border/40 bg-background/35 px-3 py-1 text-xs text-muted-foreground">
+                      {demoProperty.surface}
+                    </span>
+                    <span className="rounded-full border border-border/40 bg-background/35 px-3 py-1 text-xs text-muted-foreground">
+                      Demonstration
+                    </span>
+                  </div>
+
+                  <h3 className="mt-4 text-xl font-display font-semibold text-foreground">{demoProperty.title}</h3>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {[
+                      { label: "Prix affiche", value: demoProperty.price },
+                      { label: "Loyer estime", value: demoProperty.rent },
+                      { label: "Rentabilite", value: demoProperty.yield },
+                      { label: "Cash-flow", value: demoProperty.cashFlow },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-[1.1rem] border border-border/40 bg-background/35 p-4">
+                        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{item.label}</p>
+                        <p className="mt-2 text-lg font-semibold text-foreground">{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <aside className="rounded-[1.5rem] border border-border/50 bg-card/50 p-5 md:p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Lecture GIGD</p>
+                <div className="mt-4 rounded-[1.1rem] border border-border/40 bg-background/35 p-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Prix au m2 vs marche</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{demoProperty.marketGap}</p>
+                </div>
+
+                <ul className="mt-4 space-y-3 text-sm leading-6 text-muted-foreground">
+                  {demoHighlights.map((point) => (
+                    <li key={point} className="rounded-xl border border-border/40 bg-background/35 px-4 py-3">
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-4 rounded-[1.1rem] border border-primary/20 bg-primary/5 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Conclusion demo</p>
+                  <p className="mt-2 text-sm leading-6 text-foreground/85">
+                    Dossier plutot sain pour un investisseur qui cherche une exploitation simple. Le bien reste credible
+                    si le loyer retenu est prudent, mais il faut garder un oeil sur le niveau d'entree par rapport au
+                    secteur.
+                  </p>
+                </div>
+
+                <div className="mt-6 flex flex-col gap-3">
+                  <Link
+                    to={defaultAnalysisHref}
+                    onClick={() => trackEvent("click_cta_primary", { location: "home-bottom", target: defaultAnalysisHref })}
+                  >
+                    <Button className="w-full" variant="hero">
+                      Lancer une analyse
+                      <ArrowRight size={16} strokeWidth={1.5} />
+                    </Button>
+                  </Link>
+                  <Link
+                    to="/methode"
+                    onClick={() => trackEvent("click_cta_secondary", { location: "home-bottom", target: "/methode" })}
+                  >
+                    <Button className="w-full" variant="hero-outline">Comprendre la methode</Button>
+                  </Link>
+                </div>
+              </aside>
+            </div>
+          </section>
         </div>
       </main>
 
