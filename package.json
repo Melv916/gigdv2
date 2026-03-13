@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "build:dev": "vite build --mode development",
+    "generate:seo": "node scripts/generate-static-seo.mjs",
+    "build": "npm run generate:seo && vite build",
+    "build:dev": "npm run generate:seo && vite build --mode development",
     "lint": "eslint .",
     "import:city-prices": "node scripts/import_city_market_prices_from_excel.mjs",
     "preview": "vite preview",

@@ -6,6 +6,9 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
+  RewriteCond %{HTTP_HOST} ^www\.gigd\.fr$ [NC]
+  RewriteRule ^(.*)$ https://gigd.fr/$1 [R=301,L]
+
   RewriteRule ^sitemap\.xml$ - [L]
   RewriteRule ^robots\.txt$ - [L]
 

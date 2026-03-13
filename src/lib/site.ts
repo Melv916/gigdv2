@@ -69,14 +69,13 @@ export function getAnalysisCtaPath(isAuthenticated: boolean): string {
   return isAuthenticated ? "/app/projets/nouveau" : "/auth?next=%2Fapp%2Fprojets%2Fnouveau";
 }
 
-export const publicSitePaths = [
+export const sitemapSitePaths = [
   "/",
   "/produit",
   "/tarifs",
   "/faq",
   "/mentions-legales",
   "/politique-confidentialite",
-  "/confidentialite",
   "/contact",
   "/a-propos",
   "/methode",
@@ -90,3 +89,5 @@ export const publicSitePaths = [
   "/sci-ou-nom-propre",
   "/cgu",
 ];
+
+export const publicSitePaths = [...sitemapSitePaths, "/confidentialite"];
