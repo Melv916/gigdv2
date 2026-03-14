@@ -49,7 +49,7 @@ const Index = () => {
     <div className="v2home-root min-h-screen flex flex-col">
       <Seo
         title="Analyse investissement locatif"
-        description="GIGD aide a analyser une annonce immobiliere, comprendre la rentabilite, le cash-flow et les points a verifier avant decision."
+        description="GIGD aide les investisseurs à analyser une annonce immobilière, calculer la rentabilité réelle d'un projet locatif et prendre une décision claire et rapide."
         pathname="/"
         structuredData={[
           {
@@ -113,14 +113,6 @@ const Index = () => {
                   <span className="v2home-headline-accent">soyez surs.</span>
                 </h1>
 
-                <p className="mt-5 text-base md:text-xl text-white/90 max-w-3xl mx-auto">
-                  Analysez un bien locatif avant visite, offre ou arbitrage.
-                </p>
-
-                <p className="mt-4 hidden max-w-3xl mx-auto text-base leading-8 text-slate-300 md:block">
-                  GIGD transforme une annonce ou une saisie de bien en lecture claire du rendement, du cash-flow, du
-                  loyer cible, du prix au m2 et des points de vigilance decisifs.
-                </p>
                 <p className="mt-4 max-w-sm mx-auto text-sm leading-6 text-slate-300 md:hidden">
                   GIGD vous aide a savoir rapidement si une annonce tient vraiment, sans bruit inutile.
                 </p>
@@ -186,11 +178,6 @@ const Index = () => {
                 <h2 className="mt-3 text-2xl font-display font-bold text-foreground md:text-4xl">
                   Un exemple concret de lecture GIGD
                 </h2>
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground md:text-base">
-                  Exemple fige, purement demonstratif, pour montrer comment une annonce peut etre lue sans dependance a
-                  une donnee en direct.
-                </p>
-
                 <div className="mt-6 rounded-[1.5rem] border border-border/50 bg-card/60 p-5 md:p-6">
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
