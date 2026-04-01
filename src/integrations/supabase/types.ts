@@ -161,46 +161,131 @@ export type Database = {
         }
         Relationships: []
       }
+      analysis_tax_comparisons: {
+        Row: {
+          analysis_id: string
+          compared_regimes_json: Json
+          comparison_table_json: Json
+          created_at: string
+        }
+        Insert: {
+          analysis_id: string
+          compared_regimes_json?: Json
+          comparison_table_json?: Json
+          created_at?: string
+        }
+        Update: {
+          analysis_id?: string
+          compared_regimes_json?: Json
+          comparison_table_json?: Json
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_tax_comparisons_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: true
+            referencedRelation: "project_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analysis_tax_results: {
+        Row: {
+          analysis_id: string
+          assumptions_json: Json
+          created_at: string
+          regime: string
+          result_json: Json
+          warnings_json: Json
+        }
+        Insert: {
+          analysis_id: string
+          assumptions_json?: Json
+          created_at?: string
+          regime: string
+          result_json?: Json
+          warnings_json?: Json
+        }
+        Update: {
+          analysis_id?: string
+          assumptions_json?: Json
+          created_at?: string
+          regime?: string
+          result_json?: Json
+          warnings_json?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_tax_results_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "project_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
+          corporate_tax_rate: number | null
           current_period_end: string | null
           current_period_start: string | null
           created_at: string
+          default_ownership_mode: string | null
+          default_tax_regime: string | null
           display_name: string | null
           email: string | null
           id: string
+          investor_objective: string | null
           plan: string
+          reduced_is_eligible: boolean | null
+          social_rate: number | null
           stripe_customer_id: string | null
           stripe_status: string | null
           stripe_subscription_id: string | null
+          tmi: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          corporate_tax_rate?: number | null
           current_period_end?: string | null
           current_period_start?: string | null
           created_at?: string
+          default_ownership_mode?: string | null
+          default_tax_regime?: string | null
           display_name?: string | null
           email?: string | null
           id?: string
+          investor_objective?: string | null
           plan?: string
+          reduced_is_eligible?: boolean | null
+          social_rate?: number | null
           stripe_customer_id?: string | null
           stripe_status?: string | null
           stripe_subscription_id?: string | null
+          tmi?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          corporate_tax_rate?: number | null
           current_period_end?: string | null
           current_period_start?: string | null
           created_at?: string
+          default_ownership_mode?: string | null
+          default_tax_regime?: string | null
           display_name?: string | null
           email?: string | null
           id?: string
+          investor_objective?: string | null
           plan?: string
+          reduced_is_eligible?: boolean | null
+          social_rate?: number | null
           stripe_customer_id?: string | null
           stripe_status?: string | null
           stripe_subscription_id?: string | null
+          tmi?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -211,20 +296,38 @@ export type Database = {
           adr: number | null
           analysis_result: Json | null
           autres_couts: number | null
+          canonical_input_json: Json | null
           charges_mensuelles: number | null
           code_postal: string | null
+          core_calc_version: string | null
+          corporate_tax_rate: number | null
           created_at: string
           dpe: string | null
+          dividend_distribution_rate: number | null
           dvf_summary: Json | null
+          economic_result_json: Json | null
+          exploitation_mode: string | null
           id: string
+          investor_objective: string | null
           listing_data: Json | null
           loyer_estime: number | null
+          mother_daughter_rate: number | null
           occupation_cible: number | null
+          ownership_mode: string | null
+          patrimonial_result_json: Json | null
           pieces: number | null
           prix: number | null
           project_id: string
+          reduced_is_eligible: boolean | null
+          social_rate: number | null
           surface: number | null
           taxe_fonciere: number | null
+          tax_analysis_json: Json | null
+          tax_calc_version: string | null
+          tax_comparison_json: Json | null
+          tax_regime: string | null
+          tax_settings_json: Json | null
+          tmi: number | null
           travaux_estimes: number | null
           type_local: string | null
           url: string | null
@@ -235,20 +338,38 @@ export type Database = {
           adr?: number | null
           analysis_result?: Json | null
           autres_couts?: number | null
+          canonical_input_json?: Json | null
           charges_mensuelles?: number | null
           code_postal?: string | null
+          core_calc_version?: string | null
+          corporate_tax_rate?: number | null
           created_at?: string
           dpe?: string | null
+          dividend_distribution_rate?: number | null
           dvf_summary?: Json | null
+          economic_result_json?: Json | null
+          exploitation_mode?: string | null
           id?: string
+          investor_objective?: string | null
           listing_data?: Json | null
           loyer_estime?: number | null
+          mother_daughter_rate?: number | null
           occupation_cible?: number | null
+          ownership_mode?: string | null
+          patrimonial_result_json?: Json | null
           pieces?: number | null
           prix?: number | null
           project_id: string
+          reduced_is_eligible?: boolean | null
+          social_rate?: number | null
           surface?: number | null
           taxe_fonciere?: number | null
+          tax_analysis_json?: Json | null
+          tax_calc_version?: string | null
+          tax_comparison_json?: Json | null
+          tax_regime?: string | null
+          tax_settings_json?: Json | null
+          tmi?: number | null
           travaux_estimes?: number | null
           type_local?: string | null
           url?: string | null
@@ -259,20 +380,38 @@ export type Database = {
           adr?: number | null
           analysis_result?: Json | null
           autres_couts?: number | null
+          canonical_input_json?: Json | null
           charges_mensuelles?: number | null
           code_postal?: string | null
+          core_calc_version?: string | null
+          corporate_tax_rate?: number | null
           created_at?: string
           dpe?: string | null
+          dividend_distribution_rate?: number | null
           dvf_summary?: Json | null
+          economic_result_json?: Json | null
+          exploitation_mode?: string | null
           id?: string
+          investor_objective?: string | null
           listing_data?: Json | null
           loyer_estime?: number | null
+          mother_daughter_rate?: number | null
           occupation_cible?: number | null
+          ownership_mode?: string | null
+          patrimonial_result_json?: Json | null
           pieces?: number | null
           prix?: number | null
           project_id?: string
+          reduced_is_eligible?: boolean | null
+          social_rate?: number | null
           surface?: number | null
           taxe_fonciere?: number | null
+          tax_analysis_json?: Json | null
+          tax_calc_version?: string | null
+          tax_comparison_json?: Json | null
+          tax_regime?: string | null
+          tax_settings_json?: Json | null
+          tmi?: number | null
           travaux_estimes?: number | null
           type_local?: string | null
           url?: string | null
@@ -291,66 +430,111 @@ export type Database = {
       }
       projects: {
         Row: {
+          accounting_fees: number | null
           apport: number | null
+          amortization_settings_json: Json | null
           assurance_emprunteur: number | null
           budget_travaux: number | null
           charges_non_recup: number | null
+          corporate_tax_rate: number | null
           created_at: string
           croissance_loyers: number | null
           croissance_valeur: number | null
+          default_tax_regime: string | null
+          dividend_distribution_rate: number | null
           duree_credit: number | null
+          exploitation_mode: string | null
           financement: string
+          furniture_amount: number | null
           frais_notaire_pct: number | null
           id: string
           inflation_charges: number | null
+          investor_objective: string | null
+          management_fees: number | null
+          mother_daughter_rate: number | null
           name: string
           objectif: string
+          ownership_mode: string | null
+          property_insurance: number | null
+          reduced_is_eligible: boolean | null
+          social_rate: number | null
           status: string | null
           strategie: string
+          tmi: number | null
           taux_interet: number | null
           updated_at: string
           user_id: string
           vacance_locative: number | null
         }
         Insert: {
+          accounting_fees?: number | null
           apport?: number | null
+          amortization_settings_json?: Json | null
           assurance_emprunteur?: number | null
           budget_travaux?: number | null
           charges_non_recup?: number | null
+          corporate_tax_rate?: number | null
           created_at?: string
           croissance_loyers?: number | null
           croissance_valeur?: number | null
+          default_tax_regime?: string | null
+          dividend_distribution_rate?: number | null
           duree_credit?: number | null
+          exploitation_mode?: string | null
           financement?: string
+          furniture_amount?: number | null
           frais_notaire_pct?: number | null
           id?: string
           inflation_charges?: number | null
+          investor_objective?: string | null
+          management_fees?: number | null
+          mother_daughter_rate?: number | null
           name: string
           objectif?: string
+          ownership_mode?: string | null
+          property_insurance?: number | null
+          reduced_is_eligible?: boolean | null
+          social_rate?: number | null
           status?: string | null
           strategie?: string
+          tmi?: number | null
           taux_interet?: number | null
           updated_at?: string
           user_id: string
           vacance_locative?: number | null
         }
         Update: {
+          accounting_fees?: number | null
           apport?: number | null
+          amortization_settings_json?: Json | null
           assurance_emprunteur?: number | null
           budget_travaux?: number | null
           charges_non_recup?: number | null
+          corporate_tax_rate?: number | null
           created_at?: string
           croissance_loyers?: number | null
           croissance_valeur?: number | null
+          default_tax_regime?: string | null
+          dividend_distribution_rate?: number | null
           duree_credit?: number | null
+          exploitation_mode?: string | null
           financement?: string
+          furniture_amount?: number | null
           frais_notaire_pct?: number | null
           id?: string
           inflation_charges?: number | null
+          investor_objective?: string | null
+          management_fees?: number | null
+          mother_daughter_rate?: number | null
           name?: string
           objectif?: string
+          ownership_mode?: string | null
+          property_insurance?: number | null
+          reduced_is_eligible?: boolean | null
+          social_rate?: number | null
           status?: string | null
           strategie?: string
+          tmi?: number | null
           taux_interet?: number | null
           updated_at?: string
           user_id?: string

@@ -179,7 +179,7 @@ function renderRoute(path: string) {
 describe("App Smoke Routes", () => {
   it("renders landing page", async () => {
     renderRoute("/");
-    expect(await screen.findByText(/Analysez un bien locatif/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Ne devinez plus/i)).toBeInTheDocument();
   });
 
   it("renders product page", async () => {

@@ -1,4 +1,5 @@
 ﻿import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,8 +17,25 @@ import {
   type ProjectParams,
   type Projection,
 } from "@/lib/calculations";
-import { importAnalysisUrl } from "@/lib/v2/api";
+import { getMe, importAnalysisUrl } from "@/lib/v2/api";
 import { fetchRentEstimate } from "@/lib/investment/api";
+import {
+  TAX_REGIME_OPTIONS,
+  analyzeInvestment,
+  buildCanonicalInvestmentInput,
+  compareTaxRegimes,
+  defaultTaxSettings,
+  mapProjectStrategyToExploitationMode,
+  normalizeAppPlan,
+  resolveTaxCompatibilityDiagnostics,
+  type AppPlan,
+  type InvestmentAnalysis,
+  type InvestorObjective,
+  type OwnershipMode,
+  type ProjectTaxSettingsInput,
+  type TaxComparisonRow,
+  type TaxRegime,
+} from "@/lib/investment/tax";
 import {
   buildMarketData,
   normalizePropertyData,
@@ -26,6 +44,7 @@ import {
 } from "@/lib/market/cityMarketPipeline";
 import { buildAnalysisKpiModel } from "@/features/investment/analysis/kpiModel";
 import { AnalysisResultsCard } from "@/features/investment/analysis/components/AnalysisResultsCard";
+import { TaxSimulationCard } from "@/features/investment/analysis/components/TaxSimulationCard";
 import {
   AnalysisInputCard,
   FinancialSummaryCards,
@@ -63,6 +82,26 @@ interface Project {
   croissance_loyers: number;
   inflation_charges: number;
   status: string;
+  exploitation_mode?: string | null;
+  ownership_mode?: OwnershipMode | null;
+  default_tax_regime?: TaxRegime | null;
+  investor_objective?: InvestorObjective | null;
+  tmi?: number | null;
+  social_rate?: number | null;
+  corporate_tax_rate?: number | null;
+  reduced_is_eligible?: boolean | null;
+  dividend_distribution_rate?: number | null;
+  mother_daughter_rate?: number | null;
+  accounting_fees?: number | null;
+  furniture_amount?: number | null;
+  management_fees?: number | null;
+  property_insurance?: number | null;
+  amortization_settings_json?: {
+    amortizationEnabled?: boolean;
+    landValueRatio?: number;
+    buildingAmortizationYears?: number;
+    furnitureAmortizationYears?: number;
+  } | null;
 }
 
 interface AnalysisResult {
@@ -186,6 +225,44 @@ function inferTypology(surface: number, pieces?: number | null): "all" | "t1t2" 
   return "all";
 }
 
+function hydrateTaxSettings(project: Project | null): ProjectTaxSettingsInput {
+  const exploitationMode = mapProjectStrategyToExploitationMode(project?.strategie || "meuble");
+  const defaults = defaultTaxSettings(exploitationMode);
+  const amortization = project?.amortization_settings_json || {};
+
+  return {
+    ...defaults,
+    exploitationMode: (project?.exploitation_mode as ProjectTaxSettingsInput["exploitationMode"]) || defaults.exploitationMode,
+    ownershipMode: project?.ownership_mode || defaults.ownershipMode,
+    taxRegime: project?.default_tax_regime || defaults.taxRegime,
+    investorObjective: project?.investor_objective || defaults.investorObjective,
+    tmi: Number(project?.tmi ?? defaults.tmi),
+    socialRate: Number(project?.social_rate ?? defaults.socialRate),
+    corporateTaxRate: Number(project?.corporate_tax_rate ?? defaults.corporateTaxRate),
+    reducedCorporateTaxEligible:
+      typeof project?.reduced_is_eligible === "boolean"
+        ? project.reduced_is_eligible
+        : defaults.reducedCorporateTaxEligible,
+    dividendDistributionRate: Number(project?.dividend_distribution_rate ?? defaults.dividendDistributionRate),
+    motherDaughterRate: Number(project?.mother_daughter_rate ?? defaults.motherDaughterRate),
+    accountingFees: Number(project?.accounting_fees ?? defaults.accountingFees),
+    furnitureAmount: Number(project?.furniture_amount ?? defaults.furnitureAmount),
+    managementFees: Number(project?.management_fees ?? defaults.managementFees),
+    insurance: Number(project?.property_insurance ?? defaults.insurance),
+    amortizationEnabled:
+      typeof amortization?.amortizationEnabled === "boolean"
+        ? amortization.amortizationEnabled
+        : defaults.amortizationEnabled,
+    landValueRatio: Number(amortization?.landValueRatio ?? defaults.landValueRatio),
+    buildingAmortizationYears: Number(
+      amortization?.buildingAmortizationYears ?? defaults.buildingAmortizationYears,
+    ),
+    furnitureAmortizationYears: Number(
+      amortization?.furnitureAmortizationYears ?? defaults.furnitureAmortizationYears,
+    ),
+  };
+}
+
 const ProjectDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
@@ -214,6 +291,13 @@ const ProjectDetail = () => {
   const [marketStatus, setMarketStatus] = useState<"ok" | "processing" | "failed" | "indisponible">("indisponible");
   const [marketData, setMarketData] = useState<MarketData | null>(null);
   const [propertyData, setPropertyData] = useState<PropertyData | null>(null);
+  const [plan, setPlan] = useState<AppPlan>("free");
+  const [taxSettings, setTaxSettings] = useState<ProjectTaxSettingsInput>(
+    defaultTaxSettings(mapProjectStrategyToExploitationMode("meuble")),
+  );
+  const [taxAnalysis, setTaxAnalysis] = useState<InvestmentAnalysis | null>(null);
+  const [taxComparisonRows, setTaxComparisonRows] = useState<TaxComparisonRow[]>([]);
+  const [comparisonRegimes, setComparisonRegimes] = useState<TaxRegime[]>([]);
 
   // Projections
   const [projections, setProjections] = useState<Projection[]>([]);
@@ -232,11 +316,20 @@ const ProjectDetail = () => {
       .single()
       .then(({ data }) => {
         if (data) {
-          setProject(data as unknown as Project);
+          const typedProject = data as unknown as Project;
+          setProject(typedProject);
+          setTaxSettings(hydrateTaxSettings(typedProject));
         }
         setLoading(false);
       });
   }, [user, id]);
+
+  useEffect(() => {
+    if (!user) return;
+    getMe()
+      .then((data) => setPlan(normalizeAppPlan(data?.plan)))
+      .catch(() => setPlan("free"));
+  }, [user]);
 
   // Load saved analyses
   useEffect(() => {
@@ -254,22 +347,88 @@ const ProjectDetail = () => {
       });
   }, [user, id]);
 
-  const params: ProjectParams | null = project
-    ? {
-        financement: project.financement,
-        apport: Number(project.apport),
-        duree_credit: project.duree_credit,
-        taux_interet: Number(project.taux_interet),
-        assurance_emprunteur: Number(project.assurance_emprunteur),
-        frais_notaire_pct: Number(project.frais_notaire_pct),
-        vacance_locative: project.vacance_locative,
-        charges_non_recup: Number(project.charges_non_recup),
-        budget_travaux: Number(project.budget_travaux),
-        croissance_valeur: Number(project.croissance_valeur),
-        croissance_loyers: Number(project.croissance_loyers),
-        inflation_charges: Number(project.inflation_charges),
-      }
-    : null;
+  const params: ProjectParams | null = useMemo(
+    () =>
+      project
+        ? {
+            financement: project.financement,
+            apport: Number(project.apport),
+            duree_credit: project.duree_credit,
+            taux_interet: Number(project.taux_interet),
+            assurance_emprunteur: Number(project.assurance_emprunteur),
+            frais_notaire_pct: Number(project.frais_notaire_pct),
+            vacance_locative: project.vacance_locative,
+            charges_non_recup: Number(project.charges_non_recup),
+            budget_travaux: Number(project.budget_travaux),
+            croissance_valeur: Number(project.croissance_valeur),
+            croissance_loyers: Number(project.croissance_loyers),
+            inflation_charges: Number(project.inflation_charges),
+          }
+        : null,
+    [project],
+  );
+
+  const updateTaxSettings = <K extends keyof ProjectTaxSettingsInput>(
+    key: K,
+    value: ProjectTaxSettingsInput[K],
+  ) => {
+    setTaxSettings((current) => ({ ...current, [key]: value }));
+  };
+
+  const taxDiagnostics = useMemo(
+    () =>
+      resolveTaxCompatibilityDiagnostics(
+        plan,
+        taxSettings.ownershipMode,
+        taxSettings.exploitationMode,
+      ),
+    [plan, taxSettings.ownershipMode, taxSettings.exploitationMode],
+  );
+
+  const availableRegimeOptions = useMemo(() => {
+    const hiddenNotImplemented: string[] = [];
+    const options = taxDiagnostics.regimes
+      .map((regime) => TAX_REGIME_OPTIONS[regime])
+      .filter((option) => {
+        if (!option) return false;
+        if (option.notYetImplemented) {
+          hiddenNotImplemented.push(option.label);
+          return false;
+        }
+        return true;
+      });
+    return {
+      options,
+      warnings:
+        hiddenNotImplemented.length > 0
+          ? [`Regimes avances detectes mais non encore implementes: ${hiddenNotImplemented.join(", ")}.`]
+          : [],
+    };
+  }, [taxDiagnostics.regimes]);
+
+  const taxUiWarnings = useMemo(
+    () => [...taxDiagnostics.warnings, ...availableRegimeOptions.warnings],
+    [availableRegimeOptions.warnings, taxDiagnostics.warnings],
+  );
+
+  const selectedRegimeOption =
+    availableRegimeOptions.options.find((option) => option.regime === taxSettings.taxRegime) || null;
+
+  useEffect(() => {
+    const availableRegimes = availableRegimeOptions.options.map((option) => option.regime);
+    if (availableRegimes.length === 0) {
+      setComparisonRegimes([]);
+      return;
+    }
+
+    if (!availableRegimes.includes(taxSettings.taxRegime)) {
+      setTaxSettings((current) => ({ ...current, taxRegime: availableRegimes[0] }));
+    }
+
+    setComparisonRegimes((current) =>
+      current.filter((regime) => regime !== taxSettings.taxRegime && availableRegimes.includes(regime)).slice(0, 3),
+    );
+  }, [availableRegimeOptions.options, taxSettings.taxRegime]);
 
   const handleAnalyse = async () => {
     if (!project || !params) return;
@@ -280,6 +439,8 @@ const ProjectDetail = () => {
     setPropertyData(null);
     setListing(null);
     setProjections([]);
+    setTaxAnalysis(null);
+    setTaxComparisonRows([]);
 
     try {
       let listingData: any = null;
@@ -506,6 +667,49 @@ const ProjectDetail = () => {
       // Calculate projections locally
       const projs = calcProjections(params, prix, loyerPourCalc, chargesMensuelles, taxeFonciere, travaux, autresCouts);
       setProjections(projs);
+      let taxAnalysisForSave: InvestmentAnalysis | null = null;
+      let taxComparisonForSave: TaxComparisonRow[] = [];
+      let canonicalInputForSave: ReturnType<typeof buildCanonicalInvestmentInput> | null = null;
+
+      if (!taxDiagnostics.paywallRequired && availableRegimeOptions.options.length > 0) {
+        try {
+          canonicalInputForSave = buildCanonicalInvestmentInput({
+            price: prix,
+            notaryFees: fraisNotaireLocal,
+            worksAmount: travaux,
+            annualRent: loyerPourCalc * 12,
+            annualCharges: (chargesMensuelles + params.charges_non_recup) * 12,
+            propertyTax: taxeFonciere,
+            vacancyRate: params.vacance_locative / 12,
+            loanAmount: capitalEmprunteLocal,
+            annualDebtService: mensualiteTotaleLocal * 12,
+            annualBorrowerInsurance: assuranceMensuelleLocal * 12,
+            interestRate: params.taux_interet,
+            durationYears: params.duree_credit,
+            annualRentGrowthRate: params.croissance_loyers / 100,
+            annualValueGrowthRate: params.croissance_valeur / 100,
+            annualChargeGrowthRate: params.inflation_charges / 100,
+            taxSettings,
+          });
+          taxAnalysisForSave = analyzeInvestment(canonicalInputForSave);
+          const regimesToCompare = [
+            taxSettings.taxRegime,
+            ...comparisonRegimes.filter((regime) =>
+              availableRegimeOptions.options.some((option) => option.regime === regime),
+            ),
+          ].slice(0, 4);
+          taxComparisonForSave = compareTaxRegimes(canonicalInputForSave, Array.from(new Set(regimesToCompare)));
+          setTaxAnalysis(taxAnalysisForSave);
+          setTaxComparisonRows(taxComparisonForSave);
+        } catch (taxError) {
+          console.warn("[analysis] tax simulation failed", taxError);
+          setTaxAnalysis(null);
+          setTaxComparisonRows([]);
+        }
+      } else {
+        setTaxAnalysis(null);
+        setTaxComparisonRows([]);
+      }
       console.log("[analysis] final payload for calculation", {
         propertyData: normalizedProperty,
         marketData: normalizedMarket,
@@ -538,14 +742,82 @@ const ProjectDetail = () => {
           adr: adr || null,
           occupation_cible: occupationCible || null,
           autres_couts: autresCouts,
+          exploitation_mode: taxSettings.exploitationMode,
+          ownership_mode: taxSettings.ownershipMode,
+          tax_regime: taxSettings.taxRegime,
+          investor_objective: taxSettings.investorObjective,
+          tmi: taxSettings.tmi,
+          social_rate: taxSettings.socialRate,
+          corporate_tax_rate: taxSettings.corporateTaxRate,
+          reduced_is_eligible: taxSettings.reducedCorporateTaxEligible,
+          dividend_distribution_rate: taxSettings.dividendDistributionRate,
+          mother_daughter_rate: taxSettings.motherDaughterRate,
+          amortization_settings_json: {
+            amortizationEnabled: taxSettings.amortizationEnabled,
+            landValueRatio: taxSettings.landValueRatio,
+            buildingAmortizationYears: taxSettings.buildingAmortizationYears,
+            furnitureAmortizationYears: taxSettings.furnitureAmortizationYears,
+          },
           listing_data: listingData,
           dvf_summary: marketSummary,
           analysis_result: fallbackAnalysis,
+          tax_settings_json: taxSettings,
+          tax_analysis_json: taxAnalysisForSave,
+          tax_comparison_json: taxComparisonForSave,
+          canonical_input_json: canonicalInputForSave,
+          economic_result_json: taxAnalysisForSave?.economic || null,
+          patrimonial_result_json: taxAnalysisForSave?.patrimonial || null,
+          core_calc_version: taxAnalysisForSave?.versions.coreCalcVersion || null,
+          tax_calc_version: taxAnalysisForSave?.versions.taxCalcVersion || null,
         };
-        const { data: saved } = await supabase.from("project_analyses").insert(analysisRecord).select().single();
+        const { data: saved } = await supabase.from("project_analyses").insert(analysisRecord as any).select().single();
         if (saved) {
           setSavedAnalyses((prev) => [saved, ...prev]);
+          if (taxAnalysisForSave) {
+            await supabase.from("analysis_tax_results").upsert(
+              taxComparisonForSave.map((row) => ({
+                analysis_id: saved.id,
+                regime: row.regime,
+                result_json: row,
+                assumptions_json:
+                  row.regime === taxAnalysisForSave?.fiscal.regime ? taxAnalysisForSave.fiscal.assumptions : [],
+                warnings_json:
+                  row.regime === taxAnalysisForSave?.fiscal.regime ? taxAnalysisForSave.fiscal.warnings : row.warnings,
+              })),
+              { onConflict: "analysis_id,regime" },
+            );
+            await supabase.from("analysis_tax_comparisons").upsert({
+              analysis_id: saved.id,
+              compared_regimes_json: taxComparisonForSave.map((row) => row.regime),
+              comparison_table_json: taxComparisonForSave,
+            });
+          }
         }
+        await supabase
+          .from("projects")
+          .update({
+            exploitation_mode: taxSettings.exploitationMode,
+            ownership_mode: taxSettings.ownershipMode,
+            default_tax_regime: taxSettings.taxRegime,
+            investor_objective: taxSettings.investorObjective,
+            tmi: taxSettings.tmi,
+            social_rate: taxSettings.socialRate,
+            corporate_tax_rate: taxSettings.corporateTaxRate,
+            reduced_is_eligible: taxSettings.reducedCorporateTaxEligible,
+            dividend_distribution_rate: taxSettings.dividendDistributionRate,
+            mother_daughter_rate: taxSettings.motherDaughterRate,
+            accounting_fees: taxSettings.accountingFees,
+            furniture_amount: taxSettings.furnitureAmount,
+            management_fees: taxSettings.managementFees,
+            property_insurance: taxSettings.insurance,
+            amortization_settings_json: {
+              amortizationEnabled: taxSettings.amortizationEnabled,
+              landValueRatio: taxSettings.landValueRatio,
+              buildingAmortizationYears: taxSettings.buildingAmortizationYears,
+              furnitureAmortizationYears: taxSettings.furnitureAmortizationYears,
+            },
+          } as any)
+          .eq("id", project.id);
       }
 
       setAnalysisStep("done");
@@ -584,14 +856,6 @@ const ProjectDetail = () => {
   const updateProject = (key: string, value: any) =>
     setProject((p) => (p ? { ...p, [key]: value } : p));
 
-  if (loading) {
-    return <AppLayout><div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" size={32} /></div></AppLayout>;
-  }
-
-  if (!project) {
-    return <AppLayout><div className="text-center py-20 text-muted-foreground">Projet introuvable.</div></AppLayout>;
-  }
-
   const isAnalyzing = analysisStep === "scraping" || analysisStep === "analyzing";
   const activePrix = listing?.prix || manualPrix;
   const activeSurface = listing?.surface || manualSurface;
@@ -602,6 +866,90 @@ const ProjectDetail = () => {
   const capitalEmprunte = params?.financement === "credit" ? coutGlobal - (params?.apport || 0) : 0;
   const mensualiteCredit = params ? calcMensualiteCredit(capitalEmprunte, params.taux_interet, params.duree_credit) : 0;
   const assuranceMensuelle = params ? calcAssuranceMensuelle(capitalEmprunte, params.assurance_emprunteur) : 0;
+  const currentTaxCanonicalInput = useMemo(() => {
+    if (!params || !aiResult || activePrix <= 0 || loyerEstime <= 0) return null;
+
+    return buildCanonicalInvestmentInput({
+      price: activePrix,
+      notaryFees: fraisNotaire,
+      worksAmount: travaux,
+      annualRent: loyerEstime * 12,
+      annualCharges: (chargesMensuelles + params.charges_non_recup) * 12,
+      propertyTax: taxeFonciere,
+      vacancyRate: params.vacance_locative / 12,
+      loanAmount: capitalEmprunte,
+      annualDebtService: (mensualiteCredit + assuranceMensuelle) * 12,
+      annualBorrowerInsurance: assuranceMensuelle * 12,
+      interestRate: params.taux_interet,
+      durationYears: params.duree_credit,
+      annualRentGrowthRate: params.croissance_loyers / 100,
+      annualValueGrowthRate: params.croissance_valeur / 100,
+      annualChargeGrowthRate: params.inflation_charges / 100,
+      taxSettings,
+    });
+  }, [
+    aiResult,
+    activePrix,
+    assuranceMensuelle,
+    capitalEmprunte,
+    chargesMensuelles,
+    fraisNotaire,
+    loyerEstime,
+    mensualiteCredit,
+    params,
+    taxeFonciere,
+    taxSettings,
+    travaux,
+  ]);
+
+  const toggleComparisonRegime = (regime: TaxRegime) => {
+    if (regime === taxSettings.taxRegime) return;
+    setComparisonRegimes((current) => {
+      if (current.includes(regime)) {
+        return current.filter((item) => item !== regime);
+      }
+      if (current.length >= 3) return current;
+      return [...current, regime];
+    });
+  };
+
+  useEffect(() => {
+    if (!currentTaxCanonicalInput || taxDiagnostics.paywallRequired || availableRegimeOptions.options.length === 0) {
+      if (taxDiagnostics.paywallRequired || availableRegimeOptions.options.length === 0) {
+        setTaxAnalysis(null);
+        setTaxComparisonRows([]);
+      }
+      return;
+    }
+
+    try {
+      const nextAnalysis = analyzeInvestment(currentTaxCanonicalInput);
+      const regimesToCompare = [
+        taxSettings.taxRegime,
+        ...comparisonRegimes.filter((regime) =>
+          availableRegimeOptions.options.some((option) => option.regime === regime),
+        ),
+      ].slice(0, 4);
+      setTaxAnalysis(nextAnalysis);
+      setTaxComparisonRows(compareTaxRegimes(currentTaxCanonicalInput, Array.from(new Set(regimesToCompare))));
+    } catch (error) {
+      console.warn("[analysis] unable to recompute tax simulation", error);
+    }
+  }, [
+    availableRegimeOptions.options,
+    comparisonRegimes,
+    currentTaxCanonicalInput,
+    taxDiagnostics.paywallRequired,
+    taxSettings.taxRegime,
+  ]);
+
+  if (loading) {
+    return <AppLayout><div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" size={32} /></div></AppLayout>;
+  }
+
+  if (!project) {
+    return <AppLayout><div className="text-center py-20 text-muted-foreground">Projet introuvable.</div></AppLayout>;
+  }
 
   // Seuils by type
   const seuilTypes = params && activePrix
@@ -877,6 +1225,71 @@ const ProjectDetail = () => {
 	                formatEUR={formatEUR}
 	                formatPct={formatPct}
 	              />
+
+                <TaxSimulationCard
+                  plan={plan}
+                  availableRegimeOptions={availableRegimeOptions.options}
+                  compatibilityWarnings={taxUiWarnings}
+                  paywallRequired={taxDiagnostics.paywallRequired}
+                  taxSettings={taxSettings}
+                  comparisonRegimes={comparisonRegimes}
+                  selectedRegimeOption={selectedRegimeOption}
+                  primaryAnalysis={taxAnalysis}
+                  comparisonRows={taxComparisonRows}
+                  onChange={updateTaxSettings}
+                  onToggleComparisonRegime={toggleComparisonRegime}
+                  formatEUR={formatEUR}
+                  formatPct={formatPct}
+                />
+
+                {taxAnalysis && (
+                  <div className="analysis-cockpit-card p-6">
+                    <h3 className="text-sm font-semibold text-foreground mb-4">Lecture patrimoniale</h3>
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <div className="analysis-cockpit-subcard p-4">
+                        <p className="analysis-label">Capital rembourse</p>
+                        <p className="analysis-kpi text-2xl">{formatEUR(taxAnalysis.patrimonial.capitalRepaid)}</p>
+                      </div>
+                      <div className="analysis-cockpit-subcard p-4">
+                        <p className="analysis-label">Tresorerie cumulee</p>
+                        <p className="analysis-kpi text-2xl">{formatEUR(taxAnalysis.patrimonial.cumulativePostTaxTreasury)}</p>
+                      </div>
+                      <div className="analysis-cockpit-subcard p-4">
+                        <p className="analysis-label">Valeur nette creee</p>
+                        <p className="analysis-kpi text-2xl">{formatEUR(taxAnalysis.patrimonial.netValueCreated)}</p>
+                      </div>
+                      <div className="analysis-cockpit-subcard p-4">
+                        <p className="analysis-label">Sortie potentielle</p>
+                        <p className="analysis-kpi text-2xl">{formatEUR(taxAnalysis.patrimonial.potentialExitValue)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="w-full min-w-[640px] text-sm">
+                        <thead>
+                          <tr className="border-b border-border/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                            <th className="pb-2 pr-4">Horizon</th>
+                            <th className="pb-2 pr-4">Valeur bien</th>
+                            <th className="pb-2 pr-4">Capital rembourse</th>
+                            <th className="pb-2 pr-4">Tresorerie apres impot</th>
+                            <th className="pb-2">Valeur nette creee</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {taxAnalysis.patrimonial.projections.map((projection) => (
+                            <tr key={projection.year} className="border-b border-border/20 text-muted-foreground">
+                              <td className="py-3 pr-4 text-foreground">{projection.year} ans</td>
+                              <td className="py-3 pr-4">{formatEUR(projection.propertyValue)}</td>
+                              <td className="py-3 pr-4">{formatEUR(projection.principalRepaid)}</td>
+                              <td className="py-3 pr-4">{formatEUR(projection.cumulativePostTaxTreasury)}</td>
+                              <td className="py-3 text-foreground">{formatEUR(projection.netValueCreated)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="mt-3 text-xs text-muted-foreground">{taxAnalysis.patrimonial.objectiveFit}</p>
+                  </div>
+                )}
 	            </motion.div>
 	          )}
 
@@ -895,6 +1308,26 @@ const ProjectDetail = () => {
                       key={a.id}
                       onClick={() => {
                         if (listing) setListing(listing);
+                        if (a.tax_settings_json) {
+                          setTaxSettings(a.tax_settings_json as ProjectTaxSettingsInput);
+                        }
+                        if (a.tax_analysis_json) {
+                          setTaxAnalysis(a.tax_analysis_json as InvestmentAnalysis);
+                        } else {
+                          setTaxAnalysis(null);
+                        }
+                        if (a.tax_comparison_json) {
+                          setTaxComparisonRows(a.tax_comparison_json as TaxComparisonRow[]);
+                          setComparisonRegimes(
+                            ((a.tax_comparison_json as TaxComparisonRow[]) || [])
+                              .map((row) => row.regime)
+                              .filter((regime) => regime !== (a.tax_settings_json as ProjectTaxSettingsInput | null)?.taxRegime)
+                              .slice(0, 3),
+                          );
+                        } else {
+                          setTaxComparisonRows([]);
+                          setComparisonRegimes([]);
+                        }
 	                        if (result) {
 	                          setAiResult(result);
 	                          setAnalysisStep("done");
