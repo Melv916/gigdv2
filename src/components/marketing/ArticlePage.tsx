@@ -13,6 +13,15 @@ interface ArticlePageProps {
   page: SeoArticleDefinition;
 }
 
+function getSectionId(title: string) {
+  return title
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export function ArticlePage({ page }: ArticlePageProps) {
   const { user } = useAuth();
   const analysisHref = getAnalysisCtaPath(Boolean(user));
@@ -21,14 +30,19 @@ export function ArticlePage({ page }: ArticlePageProps) {
   const finalSecondaryLabel = page.ctaSecondaryLabel ?? "Parler de votre besoin";
   const productTitle = page.productTitle ?? "Dans GIGD";
   const productPoints = page.productPoints ?? [
-    "Lecture du rendement, cash-flow et cout global sur la meme analyse.",
-    "Comparaison prix au m2 et estimation de loyer a partir des donnees disponibles.",
-    "Explicitation des hypotheses et points a verifier avant offre.",
+    "Lecture du rendement, cash-flow et coût global sur la même analyse.",
+    "Comparaison prix au m2 et estimation de loyer à partir des données disponibles.",
+    "Explicitation des hypothèses et points à vérifier avant offre.",
   ];
   const heroAsidePoints = page.heroAsidePoints ?? productPoints;
   const relatedPages = page.relatedPaths
     .map((path) => getSeoPageByPath(path))
     .filter((value): value is SeoArticleDefinition => Boolean(value));
+  const introParagraphs = page.intro.split("\n\n").filter(Boolean);
+  const sectionLinks = page.sections.map((section) => ({
+    id: getSectionId(section.title),
+    title: section.title,
+  }));
 
   const structuredData = [
     {
@@ -102,9 +116,13 @@ export function ArticlePage({ page }: ArticlePageProps) {
                     <h1 className="mt-4 max-w-4xl text-3xl font-display font-bold text-foreground md:text-5xl">
                       {page.h1}
                     </h1>
-                    <p className="mt-5 max-w-3xl text-sm leading-7 text-muted-foreground md:text-lg">
-                      {page.intro}
-                    </p>
+                    <div className="mt-5 max-w-3xl space-y-4">
+                      {introParagraphs.map((paragraph) => (
+                        <p key={paragraph} className="text-sm leading-7 text-muted-foreground md:text-lg">
+                          {paragraph}
+                        </p>
+                      ))}
+                    </div>
 
                     <div className="mt-8 flex flex-wrap gap-3">
                       <Link
@@ -121,7 +139,7 @@ export function ArticlePage({ page }: ArticlePageProps) {
                         onClick={() => trackEvent("click_cta_secondary", { location: page.path, target: heroSecondaryHref })}
                       >
                         <Button variant="hero-outline" size="lg">
-                          Voir la methode
+                          Voir la méthode
                         </Button>
                       </Link>
                     </div>
@@ -129,7 +147,7 @@ export function ArticlePage({ page }: ArticlePageProps) {
 
                   <aside className="rounded-[1.5rem] border border-border/50 bg-background/35 p-5">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                      {page.heroAsideTitle ?? "A retenir"}
+                      {page.heroAsideTitle ?? "À retenir"}
                     </p>
                     <ul className="mt-4 space-y-3 text-sm leading-6 text-muted-foreground">
                       {heroAsidePoints.map((point) => (
@@ -161,7 +179,11 @@ export function ArticlePage({ page }: ArticlePageProps) {
               </section>
 
               {page.sections.map((section) => (
-                <section key={section.title} className="rounded-[1.75rem] border border-border/50 bg-card/45 p-7 md:p-8">
+                <section
+                  key={section.title}
+                  id={getSectionId(section.title)}
+                  className="rounded-[1.75rem] border border-border/50 bg-card/45 p-7 md:p-8 scroll-mt-28"
+                >
                   <h2 className="text-2xl font-display font-semibold text-foreground">{section.title}</h2>
                   <div className="mt-5 space-y-4">
                     {section.paragraphs.map((paragraph) => (
@@ -274,6 +296,24 @@ export function ArticlePage({ page }: ArticlePageProps) {
             </div>
 
             <aside className="space-y-5">
+              <section className="rounded-[1.75rem] border border-border/50 bg-card/45 p-6">
+                <div className="flex items-center gap-3">
+                  <BookOpen className="text-primary" size={18} />
+                  <h2 className="text-lg font-display font-semibold text-foreground">Sommaire</h2>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {sectionLinks.map((section) => (
+                    <a
+                      key={section.id}
+                      href={`#${section.id}`}
+                      className="block rounded-xl border border-border/35 px-4 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/45 hover:bg-primary/5 hover:text-foreground"
+                    >
+                      {section.title}
+                    </a>
+                  ))}
+                </div>
+              </section>
+
               <section className="sticky top-24 rounded-[1.75rem] border border-border/50 bg-card/60 p-6">
                 <div className="flex items-center gap-3">
                   <LineChart className="text-primary" size={18} />
@@ -290,29 +330,31 @@ export function ArticlePage({ page }: ArticlePageProps) {
                     onClick={() => trackEvent("start_analysis", { location: `sidebar-${page.path}` })}
                   >
                     <Button className="w-full" variant="hero">
-                      Demarrer
+                      Démarrer
                     </Button>
                   </Link>
                 </div>
               </section>
 
-              <section className="rounded-[1.75rem] border border-border/50 bg-card/45 p-6">
-                <h2 className="text-lg font-display font-semibold text-foreground">
-                  {page.relatedTitle ?? "Liens internes recommandes"}
-                </h2>
-                <div className="mt-4 space-y-3">
-                  {relatedPages.map((relatedPage) => (
-                    <Link
-                      key={relatedPage.path}
-                      to={relatedPage.path}
-                      className="block rounded-xl border border-border/40 px-4 py-4 transition-colors hover:border-primary/45 hover:bg-primary/5"
-                    >
-                      <p className="text-sm font-medium text-foreground">{relatedPage.listingTitle}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">{relatedPage.listingDescription}</p>
-                    </Link>
-                  ))}
-                </div>
-              </section>
+              {relatedPages.length ? (
+                <section className="rounded-[1.75rem] border border-border/50 bg-card/45 p-6">
+                  <h2 className="text-lg font-display font-semibold text-foreground">
+                    {page.relatedTitle ?? "Liens internes recommandés"}
+                  </h2>
+                  <div className="mt-4 space-y-3">
+                    {relatedPages.map((relatedPage) => (
+                      <Link
+                        key={relatedPage.path}
+                        to={relatedPage.path}
+                        className="block rounded-xl border border-border/40 px-4 py-4 transition-colors hover:border-primary/45 hover:bg-primary/5"
+                      >
+                        <p className="text-sm font-medium text-foreground">{relatedPage.listingTitle}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{relatedPage.listingDescription}</p>
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
 
               <section className="rounded-[1.75rem] border border-border/50 bg-card/45 p-6">
                 <h2 className="text-lg font-display font-semibold text-foreground">Explorer aussi</h2>

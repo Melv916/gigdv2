@@ -25,6 +25,7 @@ import About from "./pages/About";
 import Method from "./pages/Method";
 import Resources from "./pages/Resources";
 import SeoArticlePage from "./pages/SeoArticlePage";
+import { seoPages } from "./content/seoPages";
 
 const queryClient = new QueryClient();
 
@@ -47,13 +48,9 @@ const App = () => (
             <Route path="/a-propos" element={<About />} />
             <Route path="/methode" element={<Method />} />
             <Route path="/ressources" element={<Resources />} />
-            <Route path="/calcul-rentabilite-locative" element={<SeoArticlePage />} />
-            <Route path="/cash-flow-immobilier" element={<SeoArticlePage />} />
-            <Route path="/analyser-une-annonce-immobiliere" element={<SeoArticlePage />} />
-            <Route path="/estimation-loyer" element={<SeoArticlePage />} />
-            <Route path="/prix-m2" element={<SeoArticlePage />} />
-            <Route path="/frais-notaire" element={<SeoArticlePage />} />
-            <Route path="/sci-ou-nom-propre" element={<SeoArticlePage />} />
+            {seoPages.map((page) => (
+              <Route key={page.path} path={page.path} element={<SeoArticlePage />} />
+            ))}
             <Route path="/cgu" element={<CGU />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/app" element={<Dashboard />} />

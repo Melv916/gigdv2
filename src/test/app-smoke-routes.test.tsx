@@ -199,7 +199,7 @@ describe("App Smoke Routes", () => {
 
   it("renders legal page", async () => {
     renderRoute("/mentions-legales");
-    expect(await screen.findByRole("heading", { name: /Mentions legales/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Mentions légales/i })).toBeInTheDocument();
     expect((await screen.findAllByText(/contact@gigd.fr/i)).length).toBeGreaterThan(0);
   });
 
@@ -215,19 +215,22 @@ describe("App Smoke Routes", () => {
 
   it("renders resources page", async () => {
     renderRoute("/ressources");
-    expect(await screen.findByRole("heading", { name: /Guides pratiques pour investisseur locatif/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Le centre de décision investisseur GIGD/i })).toBeInTheDocument();
   });
 
   it("renders a seo article page", async () => {
-    renderRoute("/cash-flow-immobilier");
+    renderRoute("/rendement-brut-net-net-net");
     expect(
-      await screen.findByRole("heading", { level: 1, name: /Comprendre le cash-flow immobilier/i }),
+      await screen.findByRole("heading", {
+        level: 1,
+        name: /Rendement brut, net, net-net : comment vraiment juger un investissement locatif/i,
+      }),
     ).toBeInTheDocument();
   });
 
   it("renders dashboard page", async () => {
     renderRoute("/app");
-    expect(await screen.findByText(/Pilotage investissement V2/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^Dashboard$/i })).toBeInTheDocument();
   });
 
   it("renders projects list page", async () => {
@@ -247,8 +250,8 @@ describe("App Smoke Routes", () => {
 
   it("renders account page", async () => {
     renderRoute("/app/compte");
-    expect(await screen.findByText(/^Compte$/i)).toBeInTheDocument();
-    expect(await screen.findByText(/Rejoindre le WhatsApp avance/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^Compte$/i })).toBeInTheDocument();
+    expect(await screen.findByText(/Rejoindre le WhatsApp avancé/i)).toBeInTheDocument();
   });
 
   it("renders subscription page", async () => {
