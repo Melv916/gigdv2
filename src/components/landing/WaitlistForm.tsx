@@ -18,10 +18,10 @@ export function WaitlistForm() {
           </div>
           <span className="text-xs font-semibold uppercase tracking-wider text-primary">GIGD V2</span>
           <h2 className="mt-3 text-3xl md:text-4xl font-display font-bold text-foreground">
-            Passez en mode operationnel
+            Passez en mode opérationnel
           </h2>
           <p className="mt-3 text-sm text-muted-foreground max-w-xl mx-auto">
-            Activez un plan, creez vos projets, comparez vos deals et pilotez vos decisions dans un seul dashboard.
+            Activez un plan, créez vos projets, comparez vos deals et pilotez vos décisions dans un seul dashboard.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link to="/tarifs">
@@ -32,7 +32,7 @@ export function WaitlistForm() {
             </Link>
             <Link to="/auth">
               <Button variant="hero-outline" size="lg">
-                Acceder a mon espace
+                Accéder à mon espace
               </Button>
             </Link>
           </div>

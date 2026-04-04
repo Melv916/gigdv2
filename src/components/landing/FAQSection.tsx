@@ -9,27 +9,27 @@ import {
 const faqs = [
   {
     q: "GIGD remplace-t-il un agent ou un expert ?",
-    a: "Non. GIGD est un outil d'aide a la decision. Il fournit des analyses chiffrees basees sur des donnees reelles (DVF/open-data loyers), mais ne remplace pas l'avis d'un professionnel.",
+    a: "Non. GIGD est un outil d'aide à la décision. Il fournit des analyses chiffrées basées sur des données réelles (DVF/open-data loyers), mais ne remplace pas l'avis d'un professionnel.",
   },
   {
-    q: "D'ou viennent les chiffres et hypotheses ?",
-    a: "Les donnees de prix proviennent des bases DVF. Les loyers viennent des sources open-data (ANIL, OLL, encadrement Paris). Les hypotheses de calcul sont affichees dans chaque analyse.",
+    q: "D'où viennent les chiffres et hypothèses ?",
+    a: "Les données de prix proviennent des bases DVF. Les loyers viennent des sources open-data (ANIL, OLL, encadrement Paris). Les hypothèses de calcul sont affichées dans chaque analyse.",
   },
   {
-    q: "Comment GIGD gere la fiscalite ?",
-    a: "GIGD propose plusieurs regimes (nu, LMNP, SCI IR/IS) avec des regles configurables. Les options d'optimisation et de fiscalite sont disponibles uniquement pour les clients en mode Avance. Les calculs sont indicatifs et doivent etre verifies avec votre expert-comptable.",
+    q: "Comment GIGD gère la fiscalité ?",
+    a: "GIGD propose plusieurs régimes (nu, LMNP, SCI IR/IS) avec des règles configurables. Les options d'optimisation et de fiscalité sont disponibles uniquement pour les clients en mode Avancé. Les calculs sont indicatifs et doivent être vérifiés avec votre expert-comptable.",
   },
   {
-    q: "Est-ce que ca marche pour la location courte duree ?",
-    a: "Oui. Vous pouvez selectionner la strategie LCD et ajuster vos hypotheses d'occupation et de revenus.",
+    q: "Est-ce que ça marche pour la location courte durée ?",
+    a: "Oui. Vous pouvez sélectionner la stratégie LCD et ajuster vos hypothèses d'occupation et de revenus.",
   },
   {
-    q: "Mes donnees sont-elles securisees ?",
-    a: "Oui. Vos donnees personnelles sont protegees conformement au RGPD. Les analyses ne sont pas partagees.",
+    q: "Mes données sont-elles sécurisées ?",
+    a: "Oui. Vos données personnelles sont protégées conformément au RGPD. Les analyses ne sont pas partagées.",
   },
   {
     q: "Comment activer mon abonnement ?",
-    a: "Depuis la page Tarifs, choisissez une formule puis finalisez le paiement Stripe. Vous pouvez ensuite gerer votre abonnement dans /app/abonnement.",
+    a: "Depuis la page Tarifs, choisissez une formule puis finalisez le paiement Stripe. Vous pouvez ensuite gérer votre abonnement dans /app/abonnement.",
   },
 ];
 
@@ -45,7 +45,7 @@ export function FAQSection() {
         >
           <span className="text-xs font-semibold uppercase tracking-wider text-primary">FAQ</span>
           <h2 className="mt-3 text-3xl md:text-4xl font-display font-bold text-foreground">
-            Questions frequentes
+            Questions fréquentes
           </h2>
         </motion.div>
         <div className="max-w-3xl mx-auto">

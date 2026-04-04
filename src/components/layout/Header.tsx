@@ -14,8 +14,8 @@ export function Header() {
   const ctaHref = getAnalysisCtaPath(Boolean(user));
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/75 backdrop-blur-xl">
-      <div className="container flex items-center justify-between h-16">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[rgba(8,14,26,0.76)] backdrop-blur-2xl">
+      <div className="container flex items-center justify-between h-16 gap-4">
         <Link to="/" className="flex flex-col leading-none">
           <span className="text-xl font-display font-bold tracking-tight text-foreground">
             GIGD<span className="text-primary">.</span>
@@ -25,15 +25,15 @@ export function Header() {
           </span>
         </Link>
 
-        <nav className="hidden md:flex items-center gap-1 rounded-full border border-border/40 bg-muted/20 p-1">
+        <nav className="hidden md:flex items-center gap-1 rounded-full border border-white/10 bg-[rgba(255,255,255,0.03)] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
           {primaryNavLinks.map((link) => (
             <Link
               key={link.to}
               to={link.to}
-              className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+              className={`px-3 py-1.5 text-sm rounded-full transition-all duration-300 ${
                 location.pathname === link.to
-                  ? "text-foreground bg-background/80"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "text-foreground bg-[rgba(17,29,52,0.92)] shadow-[0_10px_22px_rgba(0,0,0,0.22)]"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
               }`}
             >
               {link.label}
@@ -66,7 +66,7 @@ export function Header() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden glass-card border-t border-border/30 overflow-hidden"
+            className="md:hidden glass-card border-t border-white/5 overflow-hidden"
           >
             <nav className="container py-4 flex flex-col gap-2">
               {primaryNavLinks.map((link) => (
@@ -74,10 +74,10 @@ export function Header() {
                   key={link.to}
                   to={link.to}
                   onClick={() => setMobileOpen(false)}
-                  className={`px-3 py-2 text-sm rounded-md transition-colors ${
+                  className={`px-3 py-2 text-sm rounded-xl transition-all duration-300 ${
                     location.pathname === link.to
-                      ? "text-primary bg-primary/5"
-                      : "text-muted-foreground hover:text-foreground"
+                      ? "text-primary bg-primary/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
                   }`}
                 >
                   {link.label}

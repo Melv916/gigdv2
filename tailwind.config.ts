@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Untitled Sans", "Inter", "sans-serif"],
-        display: ["Aeonik Pro", "Sora", "Inter", "sans-serif"],
+        sans: ["Inter", "Manrope", "Segoe UI", "sans-serif"],
+        display: ["Inter Tight", "Manrope", "Inter", "Segoe UI", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",

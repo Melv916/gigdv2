@@ -4,18 +4,18 @@ import { BarChart3, ShieldCheck, MessageSquare } from "lucide-react";
 const pillars = [
   {
     icon: BarChart3,
-    title: "Analyse chiffree",
-    desc: "Rentabilite nette, cash-flow, prix au m2 compare et seuil de loyer, automatiquement a partir de donnees reelles.",
+    title: "Analyse chiffrée",
+    desc: "Rentabilité nette, cash-flow, prix au m2 comparé et seuil de loyer, automatiquement à partir de données réelles.",
   },
   {
     icon: ShieldCheck,
-    title: "Verifications",
-    desc: "Check-list des documents a demander, points d'attention locatifs et informations manquantes a valider avant offre.",
+    title: "Vérifications",
+    desc: "Check-list des documents à demander, points d'attention locatifs et informations manquantes à valider avant offre.",
   },
   {
     icon: MessageSquare,
-    title: "Negociation guidee",
-    desc: "Scripts adaptes selon le canal (agence ou particulier), argumentaire base sur les donnees DVF du secteur.",
+    title: "Négociation guidée",
+    desc: "Scripts adaptés selon le canal (agence ou particulier), argumentaire basé sur les données DVF du secteur.",
   },
 ];
 

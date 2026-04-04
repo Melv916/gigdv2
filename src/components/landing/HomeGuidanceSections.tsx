@@ -7,23 +7,23 @@ import { featuredSeoLinks } from "@/lib/site";
 const valueItems = [
   {
     icon: CircleGauge,
-    title: "Rentabilite lisible",
+    title: "Rentabilité lisible",
     text: "Rendement brut, net et net net pour comparer un bien avec le bon niveau d'exigence.",
   },
   {
     icon: Wallet,
-    title: "Cash-flow et mensualites",
-    text: "Lecture immediate de l'effort mensuel, de l'autofinancement et des seuils de loyer.",
+    title: "Cash-flow et mensualités",
+    text: "Lecture immédiate de l'effort mensuel, de l'autofinancement et des seuils de loyer.",
   },
   {
     icon: ChartColumn,
     title: "Prix au m2 et loyer",
-    text: "Positionnement du bien par rapport au marche et estimation du potentiel locatif.",
+    text: "Positionnement du bien par rapport au marché et estimation du potentiel locatif.",
   },
   {
     icon: ShieldCheck,
-    title: "Points a verifier",
-    text: "Signalement des angles morts, hypotheses fortes et points de vigilance avant offre.",
+    title: "Points à vérifier",
+    text: "Signalement des angles morts, hypothèses fortes et points de vigilance avant offre.",
   },
 ];
 
@@ -36,20 +36,20 @@ const audienceItems = [
   {
     icon: Landmark,
     title: "Investisseur locatif",
-    text: "Pour filtrer plus vite, comparer plusieurs opportunites et documenter une decision.",
+    text: "Pour filtrer plus vite, comparer plusieurs opportunités et documenter une décision.",
   },
   {
     icon: Building2,
     title: "Professionnel de l'immobilier",
-    text: "Pour disposer d'une lecture partageable avec un client, un associe ou un partenaire.",
+    text: "Pour disposer d'une lecture partageable avec un client, un associé ou un partenaire.",
   },
 ];
 
 const trustItems = [
-  "Approche chiffree fondee sur des KPI utiles a la decision.",
-  "Comparaison avec les references de marche disponibles dans le produit.",
-  "Hypotheses explicites et limites de lecture assumees.",
-  "Aide a la decision, sans promesse de certitude artificielle.",
+  "Approche chiffrée fondée sur des KPI utiles à la décision.",
+  "Comparaison avec les références de marché disponibles dans le produit.",
+  "Hypothèses explicites et limites de lecture assumées.",
+  "Aide à la décision, sans promesse de certitude artificielle.",
 ];
 
 export function WhatYouGetSection() {
@@ -103,7 +103,7 @@ export function AudienceSection() {
         >
           <span className="text-xs font-semibold uppercase tracking-wider text-primary">Pour qui</span>
           <h2 className="mt-3 text-2xl md:text-4xl font-display font-bold text-foreground">
-            Un produit pense pour les decisions locatives concretes
+            Un produit pensé pour les décisions locatives concrètes
           </h2>
         </motion.div>
 
@@ -137,14 +137,14 @@ export function TrustSection() {
         <div className="rounded-[2rem] border border-border/50 bg-gradient-to-br from-card via-card/85 to-primary/5 p-6 md:p-10">
           <div className="max-w-2xl">
             <span className="text-xs font-semibold uppercase tracking-wider text-primary">
-              Pourquoi faire confiance a GIGD
+              Pourquoi faire confiance à GIGD
             </span>
             <h2 className="mt-3 text-2xl md:text-4xl font-display font-bold text-foreground">
               Une logique d'analyse, pas un vernis marketing
             </h2>
             <p className="mt-4 text-sm leading-7 text-muted-foreground md:text-base">
-              GIGD sert a clarifier une decision d'investissement: lecture des KPI, comparaison au marche, restitution
-              plus lisible et transparence sur la methode.
+              GIGD sert à clarifier une décision d'investissement: lecture des KPI, comparaison au marché, restitution
+              plus lisible et transparence sur la méthode.
             </p>
           </div>
 
@@ -177,8 +177,8 @@ export function ResourceTeaserSection() {
               Pages piliers pour comprendre avant d'agir
             </h2>
             <p className="mt-4 text-sm leading-7 text-muted-foreground md:text-base">
-              Chaque ressource est connectee au produit, a la methode et aux autres sujets lies pour renforcer le
-              parcours utilisateur et la comprehension globale du site.
+              Chaque ressource est connectée au produit, à la méthode et aux autres sujets liés pour renforcer le
+              parcours utilisateur et la compréhension globale du site.
             </p>
           </div>
 

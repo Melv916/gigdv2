@@ -1016,13 +1016,13 @@ const ProjectDetail = () => {
 
   if (ecartNego > 0) {
     pointsFaiblesDecision.push({
-      flag: "Positionnement prix a renegocier",
-      impact: `${formatEUR(ecartNego)} a negocier (${formatPct(ecartNegoPct)}) pour atteindre 8% brut`,
+      flag: "Positionnement prix à renégocier",
+      impact: `${formatEUR(ecartNego)} à négocier (${formatPct(ecartNegoPct)}) pour atteindre 8% brut`,
     });
   } else if (hasRentForYield && basePrixRendement > 0 && prixCibleRendement8 > 0) {
     pointsFortsDecision.push({
-      point: "Prix coherent avec la cible de rendement",
-      impact: "Pas de negociation requise pour la cible 8% brut",
+      point: "Prix cohérent avec la cible de rendement",
+      impact: "Pas de négociation requise pour la cible 8% brut",
     });
   }
 
@@ -1030,13 +1030,13 @@ const ProjectDetail = () => {
     const ecartPrixM2Pct = ((priceM2Annonce - dvfMedianRef) / dvfMedianRef) * 100;
     if (ecartPrixM2Pct <= -5) {
       pointsFortsDecision.push({
-        point: "Prix/m² sous la reference locale",
-        impact: `${formatPct(Math.abs(ecartPrixM2Pct))} sous la mediane`,
+        point: "Prix/m² sous la référence locale",
+        impact: `${formatPct(Math.abs(ecartPrixM2Pct))} sous la médiane`,
       });
     } else if (ecartPrixM2Pct >= 5) {
       pointsFaiblesDecision.push({
-        flag: "Prix/m² au-dessus du marche local",
-        impact: `${formatPct(ecartPrixM2Pct)} au-dessus de la mediane locale`,
+        flag: "Prix/m² au-dessus du marché local",
+        impact: `${formatPct(ecartPrixM2Pct)} au-dessus de la médiane locale`,
       });
     }
   }
@@ -1048,7 +1048,7 @@ const ProjectDetail = () => {
     });
   } else {
     pointsFaiblesDecision.push({
-      flag: "Cash-flow mensuel negatif",
+      flag: "Cash-flow mensuel négatif",
       impact: formatEUR(Math.abs(cashFlowMensuelNum)),
     });
   }
@@ -1057,19 +1057,19 @@ const ProjectDetail = () => {
   if (["A", "B", "C", "D"].includes(dpe)) {
     pointsFortsDecision.push({
       point: `DPE ${dpe}`,
-      impact: "Risque reglementaire/energetique plus limite",
+      impact: "Risque réglementaire/énergétique plus limité",
     });
   } else if (["E", "F", "G"].includes(dpe)) {
     pointsFaiblesDecision.push({
       flag: `DPE ${dpe}`,
-      impact: "Travaux energetiques possibles, a chiffrer avant offre",
+      impact: "Travaux énergétiques possibles, à chiffrer avant offre",
     });
   }
 
   if (marketDataMissing) {
     pointsFaiblesDecision.push({
-      flag: "Donnees de marche partielles",
-      impact: "Decision possible mais confiance reduite sur le positionnement local",
+      flag: "Données de marché partielles",
+      impact: "Décision possible mais confiance réduite sur le positionnement local",
     });
   }
   const projectionChartData = projections.map((p) => ({
@@ -1133,7 +1133,7 @@ const ProjectDetail = () => {
             projectName={project.name}
             objectiveLabel={objectifLabels[project.objectif] || project.objectif}
             strategyLabel={strategieLabels[project.strategie] || project.strategie}
-            financingLabel={project.financement === "credit" ? "Credit" : "Comptant"}
+            financingLabel={project.financement === "credit" ? "Crédit" : "Comptant"}
             onToggleSettings={() => setShowSettings((prev) => !prev)}
           />
 
@@ -1247,15 +1247,15 @@ const ProjectDetail = () => {
                     <h3 className="text-sm font-semibold text-foreground mb-4">Lecture patrimoniale</h3>
                     <div className="grid gap-3 md:grid-cols-4">
                       <div className="analysis-cockpit-subcard p-4">
-                        <p className="analysis-label">Capital rembourse</p>
+                        <p className="analysis-label">Capital remboursé</p>
                         <p className="analysis-kpi text-2xl">{formatEUR(taxAnalysis.patrimonial.capitalRepaid)}</p>
                       </div>
                       <div className="analysis-cockpit-subcard p-4">
-                        <p className="analysis-label">Tresorerie cumulee</p>
+                        <p className="analysis-label">Trésorerie cumulée</p>
                         <p className="analysis-kpi text-2xl">{formatEUR(taxAnalysis.patrimonial.cumulativePostTaxTreasury)}</p>
                       </div>
                       <div className="analysis-cockpit-subcard p-4">
-                        <p className="analysis-label">Valeur nette creee</p>
+                        <p className="analysis-label">Valeur nette créée</p>
                         <p className="analysis-kpi text-2xl">{formatEUR(taxAnalysis.patrimonial.netValueCreated)}</p>
                       </div>
                       <div className="analysis-cockpit-subcard p-4">
@@ -1269,9 +1269,9 @@ const ProjectDetail = () => {
                           <tr className="border-b border-border/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                             <th className="pb-2 pr-4">Horizon</th>
                             <th className="pb-2 pr-4">Valeur bien</th>
-                            <th className="pb-2 pr-4">Capital rembourse</th>
-                            <th className="pb-2 pr-4">Tresorerie apres impot</th>
-                            <th className="pb-2">Valeur nette creee</th>
+                            <th className="pb-2 pr-4">Capital remboursé</th>
+                            <th className="pb-2 pr-4">Trésorerie après impôt</th>
+                            <th className="pb-2">Valeur nette créée</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1378,9 +1378,9 @@ const ProjectDetail = () => {
             <div className="analysis-cockpit-card p-6 mt-6">
               <h3 className="text-sm font-semibold text-foreground mb-3">Synthèse d'analyse</h3>
               <div className="analysis-v2-text rounded-lg p-5 text-sm text-foreground leading-7 space-y-2">
-                <p>Voici le resume d'analyse du bien.</p>
+                <p>Voici le résumé d'analyse du bien.</p>
                 <p>
-                  Par consequent, pour un cash-flow = 0, il faudrait un loyer de{" "}
+                  Par conséquent, pour un cash-flow = 0, il faudrait un loyer de{" "}
                   <span className="text-primary font-semibold">{formatEUR(selectedSeuilCashflowZero)}/mois</span>.
                 </p>
                 <p>
@@ -1392,7 +1392,7 @@ const ProjectDetail = () => {
                 <p className={cashflowPositive ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
                   {cashflowPositive
                     ? "C'est donc un bon investissement."
-                    : "Ce n'est pas un bon placement sans negociation."}
+                    : "Ce n'est pas un bon placement sans négociation."}
                 </p>
               </div>
             </div>

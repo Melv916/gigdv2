@@ -29,7 +29,7 @@ export function ProjectHeaderBar(props: ProjectHeaderProps) {
         </div>
       </div>
       <Button variant="outline" size="sm" onClick={props.onToggleSettings}>
-        <Settings size={14} /> Parametres
+        <Settings size={14} /> Paramètres
       </Button>
     </div>
   );
@@ -62,7 +62,7 @@ export function ProjectSettingsPanel(props: ProjectSettingsPanelProps) {
       className="analysis-cockpit-card mb-6 p-6"
     >
       <h3 className="mb-4 text-sm font-semibold text-foreground">
-        Parametres du projet <span className="text-xs text-primary">Methode v0.1</span>
+        Paramètres du projet <span className="text-xs text-primary">Méthode v0.1</span>
       </h3>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div className="space-y-1">
@@ -108,7 +108,7 @@ export function ProjectSettingsPanel(props: ProjectSettingsPanelProps) {
         {props.project.financement === "credit" && (
           <>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Taux interet (%)</Label>
+              <Label className="text-xs text-muted-foreground">Taux intérêt (%)</Label>
               <Input
                 type="number"
                 step="0.1"
@@ -118,7 +118,7 @@ export function ProjectSettingsPanel(props: ProjectSettingsPanelProps) {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Duree credit (ans)</Label>
+              <Label className="text-xs text-muted-foreground">Durée crédit (ans)</Label>
               <Input
                 type="number"
                 value={props.project.duree_credit}
@@ -262,7 +262,7 @@ export function AnalysisInputCard(props: AnalysisInputCardProps) {
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Taxe fonciere/an (€)</Label>
+          <Label className="text-xs">Taxe foncière/an (€)</Label>
           <Input
             type="number"
             value={props.taxeFonciere || ""}
@@ -271,7 +271,7 @@ export function AnalysisInputCard(props: AnalysisInputCardProps) {
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">{props.projectStrategie === "lcd" ? "ADR (€/nuit)" : "Loyer estime (€/mois)"}</Label>
+          <Label className="text-xs">{props.projectStrategie === "lcd" ? "ADR (€/nuit)" : "Loyer estimé (€/mois)"}</Label>
           <Input
             type="number"
             value={props.projectStrategie === "lcd" ? props.adr || "" : props.loyerEstime || ""}
@@ -287,7 +287,7 @@ export function AnalysisInputCard(props: AnalysisInputCardProps) {
 
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="space-y-1">
-          <Label className="text-xs">Autres couts (€)</Label>
+          <Label className="text-xs">Autres coûts (€)</Label>
           <Input
             type="number"
             value={props.autresCouts || ""}
@@ -372,7 +372,7 @@ export function FinancialSummaryCards(props: FinancialSummaryCardsProps) {
       sub: `${props.fraisNotairePct}% du prix`,
     },
     {
-      label: "Cout global",
+      label: "Coût global",
       value: `${props.coutGlobal.toLocaleString("fr-FR")}€`,
       sub: "Achat + notaire + travaux",
     },
@@ -381,14 +381,14 @@ export function FinancialSummaryCards(props: FinancialSummaryCardsProps) {
   if (props.financement === "credit") {
     cards.push(
       {
-        label: "Mensualite credit",
+        label: "Mensualité crédit",
         value: `${props.mensualiteCredit.toLocaleString("fr-FR")}€/mois`,
         sub: `+ ${props.assuranceMensuelle}€ assurance`,
       },
       {
-        label: "Capital emprunte",
+        label: "Capital emprunté",
         value: `${props.capitalEmprunte.toLocaleString("fr-FR")}€`,
-        sub: `${props.dureeCredit} ans a ${props.tauxInteret}%`,
+        sub: `${props.dureeCredit} ans à ${props.tauxInteret}%`,
       },
     );
   }

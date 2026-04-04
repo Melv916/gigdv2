@@ -6,7 +6,7 @@ import { Search, ArrowRight, ShieldCheck, Code2, Sparkles } from "lucide-react";
 const featureTags = [
   "Loyers open-data ANIL/OLL",
   "TRI, VAN et cash-flow net-net",
-  "Fiscalite configurable",
+  "Fiscalité configurable",
   "Comparaison multi-deals",
 ];
 
@@ -36,12 +36,12 @@ export function HeroSection() {
             <h1 className="text-4xl md:text-6xl xl:text-7xl font-display font-bold tracking-tight text-foreground leading-[1.05]">
               Analysez plus vite,
               <br />
-              <span className="gradient-text">decidez avec precision.</span>
+              <span className="gradient-text">décidez avec précision.</span>
             </h1>
 
             <p className="mt-6 text-lg text-muted-foreground max-w-2xl leading-relaxed">
-              Centralisez vos hypotheses, estimez le loyer avec les donnees publiques et obtenez
-              une lecture claire de la rentabilite, du risque bancaire et de la creation de valeur.
+              Centralisez vos hypothèses, estimez le loyer avec les données publiques et obtenez
+              une lecture claire de la rentabilité, du risque bancaire et de la création de valeur.
             </p>
 
             <div className="mt-8 max-w-2xl">
@@ -79,7 +79,7 @@ export function HeroSection() {
             className="lg:col-span-5"
           >
             <div className="holo-panel rounded-2xl p-5 gradient-border signature-float">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-3">Lecture instantanee</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-3">Lecture instantanée</p>
               <div className="space-y-3">
                 <div className="rounded-xl bg-muted/25 p-3">
                   <div className="flex items-center justify-between text-xs mb-1">

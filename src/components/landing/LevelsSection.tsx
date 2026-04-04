@@ -3,9 +3,9 @@ import { Zap, GraduationCap, TrendingUp, Gem } from "lucide-react";
 
 const levels = [
   { icon: Zap, title: "Free", desc: "5 analyses/mois + IA courte", tag: "Gratuit" },
-  { icon: GraduationCap, title: "Debutant", desc: "50 analyses/mois + IA courte", tag: "9,90 EUR/mois" },
-  { icon: TrendingUp, title: "Investisseur", desc: "Analyses illimitees + IA complete", tag: "29,90 EUR/mois" },
-  { icon: Gem, title: "Avance", desc: "Illimite + IA complete + espace premium", tag: "49,90 EUR/mois" },
+  { icon: GraduationCap, title: "Débutant", desc: "50 analyses/mois + IA courte", tag: "9,90 EUR/mois" },
+  { icon: TrendingUp, title: "Investisseur", desc: "Analyses illimitées + IA complète", tag: "29,90 EUR/mois" },
+  { icon: Gem, title: "Avancé", desc: "Illimité + IA complète + espace premium", tag: "49,90 EUR/mois" },
 ];
 
 export function LevelsSection() {
@@ -20,7 +20,7 @@ export function LevelsSection() {
         >
           <span className="text-xs font-semibold uppercase tracking-wider text-primary">Niveaux</span>
           <h2 className="mt-3 text-3xl md:text-4xl font-display font-bold text-foreground">
-            Une offre qui evolue avec votre volume d'analyses
+            Une offre qui évolue avec votre volume d'analyses
           </h2>
         </motion.div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto">

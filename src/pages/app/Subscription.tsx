@@ -70,8 +70,9 @@ const Subscription = () => {
   return (
     <AppLayout>
       <div className="max-w-5xl mx-auto space-y-6">
-        <div className="glass-card rounded-2xl p-6">
-          <h1 className="text-2xl font-display font-bold text-foreground">Abonnement</h1>
+        <div className="glass-card rounded-[1.75rem] p-6 md:p-8">
+          <p className="premium-eyebrow">Abonnement</p>
+          <h1 className="mt-3 text-2xl font-display font-bold text-foreground">Piloter le niveau d'acces GIGD</h1>
           <p className="text-sm text-muted-foreground mt-2">Plan actuel : <b>{me?.plan}</b></p>
           <p className="text-sm text-muted-foreground">Quota consommé : <b>{quotaText}</b></p>
           <p className="text-sm text-muted-foreground">Prochain reset : <b>{me?.quota?.nextReset || "-"}</b></p>
@@ -80,7 +81,7 @@ const Subscription = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           {plans.map((p) => (
-            <div key={p.id} className="glass-card rounded-xl p-4">
+            <div key={p.id} className="glass-card rounded-[1.4rem] p-5">
               <p className="font-semibold text-foreground">{p.label}</p>
               <p className="text-xs text-muted-foreground mt-1">{p.price}</p>
               <p className="text-xs text-muted-foreground mt-1">{p.desc}</p>

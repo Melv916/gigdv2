@@ -13,7 +13,7 @@ export function DashboardMock() {
         >
           <span className="text-xs font-semibold uppercase tracking-wider text-primary">Cockpit V2</span>
           <h2 className="mt-3 text-3xl md:text-4xl font-display font-bold text-foreground">
-            Une interface concue pour trancher vite
+            Une interface conçue pour trancher vite
           </h2>
         </motion.div>
 
@@ -29,10 +29,10 @@ export function DashboardMock() {
               <div className="rounded-2xl bg-muted/25 p-4">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Verdict deal</p>
                 <div className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 mb-3">
-                  A negocier
+                  À négocier
                 </div>
                 <p className="text-sm text-foreground font-semibold">T3 - Lyon 3e - 72 m2</p>
-                <p className="text-xs text-muted-foreground mt-1">Prix annonce: 285 000 EUR</p>
+                <p className="text-xs text-muted-foreground mt-1">Prix annoncé: 285 000 EUR</p>
               </div>
 
               <div className="rounded-2xl bg-muted/25 p-4">
@@ -59,8 +59,8 @@ export function DashboardMock() {
 
               <div className="rounded-2xl bg-destructive/8 border border-destructive/30 p-4">
                 <p className="text-[10px] uppercase tracking-wider text-destructive mb-2">Alerte principale</p>
-                <p className="text-sm text-foreground">Prix m2 superieur au secteur</p>
-                <p className="text-xs text-destructive mt-1">Ecart estime: -20 000 EUR</p>
+                <p className="text-sm text-foreground">Prix m2 supérieur au secteur</p>
+                <p className="text-xs text-destructive mt-1">Écart estimé: -20 000 EUR</p>
               </div>
             </div>
 
@@ -68,8 +68,8 @@ export function DashboardMock() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                 {[
                   { label: "Prix cible", value: "265k EUR", sub: "hors frais" },
-                  { label: "Loyer estime", value: "1 180 EUR", sub: "source ANIL" },
-                  { label: "Confiance", value: "72/100", sub: "donnees locales" },
+                  { label: "Loyer estimé", value: "1 180 EUR", sub: "source ANIL" },
+                  { label: "Confiance", value: "72/100", sub: "données locales" },
                   { label: "VAN 10 ans", value: "+18k EUR", sub: "taux 6%" },
                 ].map((item) => (
                   <div key={item.label} className="rounded-xl bg-muted/25 p-3">
@@ -84,16 +84,16 @@ export function DashboardMock() {
                 <div className="rounded-2xl bg-muted/20 p-4">
                   <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                     <AlertTriangle size={14} className="text-destructive" />
-                    Risques a verifier
+                    Risques à vérifier
                   </h4>
                   <div className="space-y-2 text-xs">
                     <div className="rounded-lg bg-background/40 p-3">
-                      Charges copro elevees
+                      Charges copro élevées
                       <p className="text-destructive mt-1">Impact: -4 560 EUR/an</p>
                     </div>
                     <div className="rounded-lg bg-background/40 p-3">
-                      DPE E, budget travaux a estimer
-                      <p className="text-destructive mt-1">Impact potentiel: 8k a 15k EUR</p>
+                      DPE E, budget travaux à estimer
+                      <p className="text-destructive mt-1">Impact potentiel: 8k à 15k EUR</p>
                     </div>
                   </div>
                 </div>
@@ -101,14 +101,14 @@ export function DashboardMock() {
                 <div className="rounded-2xl bg-muted/20 p-4">
                   <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                     <BarChart3 size={14} className="text-primary" />
-                    Donnees operationnelles
+                    Données opérationnelles
                   </h4>
                   <div className="space-y-2">
                     {[
                       { icon: MapPin, label: "Mediane DVF", value: "3 690 EUR/m2" },
                       { icon: TrendingUp, label: "Rendement brut", value: "5.8%" },
-                      { icon: WalletCards, label: "Mensualite", value: "1 040 EUR" },
-                      { icon: FileText, label: "Regime fiscal", value: "LMNP micro" },
+                      { icon: WalletCards, label: "Mensualité", value: "1 040 EUR" },
+                      { icon: FileText, label: "Régime fiscal", value: "LMNP micro" },
                     ].map((row) => (
                       <div key={row.label} className="flex items-center justify-between bg-background/40 rounded-lg px-3 py-2">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">

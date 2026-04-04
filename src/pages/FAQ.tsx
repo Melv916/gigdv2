@@ -12,11 +12,11 @@ import { Seo } from "@/components/seo/Seo";
 const extraFaqs = [
   {
     q: "Comment fonctionne l'analyse IA ?",
-    a: "L'analyse IA est actuellement en cours de developpement.",
+    a: "L'analyse IA est actuellement en cours de développement.",
   },
   {
     q: "Que faire si une info manque dans l'annonce ?",
-    a: "GIGD ajoute une section A verifier et liste les documents a demander. Vous pouvez aussi completer manuellement les donnees (charges, taxe fonciere, travaux) pour affiner l'analyse.",
+    a: "GIGD ajoute une section À vérifier et liste les documents à demander. Vous pouvez aussi compléter manuellement les données (charges, taxe foncière, travaux) pour affiner l'analyse.",
   },
 ];
 
@@ -27,7 +27,7 @@ const FAQ = () => {
     <PageLayout>
       <Seo
         title="FAQ GIGD"
-        description="Questions frequentes sur GIGD, le fonctionnement des analyses, les donnees et l'utilisation du produit."
+        description="Questions fréquentes sur GIGD, le fonctionnement des analyses, les données et l'utilisation du produit."
         pathname="/faq"
       />
       <section className="py-24">
@@ -42,7 +42,7 @@ const FAQ = () => {
               Toutes vos questions
             </h1>
             <p className="mt-4 text-lg text-muted-foreground max-w-xl mx-auto">
-              Retrouvez les reponses aux questions les plus frequentes sur GIGD V2.
+              Retrouvez les réponses aux questions les plus fréquentes sur GIGD V2.
             </p>
           </motion.div>
 

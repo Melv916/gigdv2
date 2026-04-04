@@ -3,8 +3,8 @@ import { Link2, CheckCircle, ThumbsUp } from "lucide-react";
 
 const steps = [
   { icon: Link2, step: "1", title: "Coller", desc: "Collez le lien d'une annonce locative." },
-  { icon: CheckCircle, step: "2", title: "Analyser", desc: "GIGD importe le bien, croise DVF/open-data loyers et calcule la rentabilite complete." },
-  { icon: ThumbsUp, step: "3", title: "Agir", desc: "Recevez une analyse IA actionnable avec points forts/faibles, verifications et strategie de nego." },
+  { icon: CheckCircle, step: "2", title: "Analyser", desc: "GIGD importe le bien, croise DVF/open-data loyers et calcule la rentabilité complète." },
+  { icon: ThumbsUp, step: "3", title: "Agir", desc: "Recevez une analyse IA actionnable avec points forts/faibles, vérifications et stratégie de négo." },
 ];
 
 export function SolutionSection() {
@@ -19,7 +19,7 @@ export function SolutionSection() {
         >
           <span className="text-xs font-semibold uppercase tracking-wider text-primary">La solution</span>
           <h2 className="mt-3 text-3xl md:text-4xl font-display font-bold text-foreground">
-            3 etapes. 1 decision locative claire.
+            3 étapes. 1 décision locative claire.
           </h2>
         </motion.div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">

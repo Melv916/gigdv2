@@ -26,7 +26,7 @@ const Contact = () => {
 
     const subject = encodeURIComponent(`Contact GIGD - ${name.trim()}`);
     const body = encodeURIComponent(
-      `Nom: ${name.trim()}\nEmail: ${email.trim()}\nSociete: ${company.trim() || "Non precise"}\n\nMessage:\n${message.trim()}`,
+      `Nom: ${name.trim()}\nEmail: ${email.trim()}\nSociété: ${company.trim() || "Non précisée"}\n\nMessage:\n${message.trim()}`,
     );
 
     trackEvent("submit_contact_form", { source: "/contact" });
@@ -57,11 +57,11 @@ const Contact = () => {
           <div className="glass-card rounded-[2rem] p-8 md:p-10">
             <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Contact</span>
             <h1 className="mt-4 text-4xl font-display font-bold text-foreground md:text-5xl">
-              Une question produit, un besoin specifique ou un sujet de partenariat
+              Une question produit, un besoin spécifique ou un sujet de partenariat
             </h1>
             <p className="mt-5 max-w-3xl text-base leading-7 text-muted-foreground md:text-lg">
-              Utilisez ce formulaire pour nous ecrire. Le message prepare un email vers {CONTACT_EMAIL} afin de rester
-              simple, direct et sans dependance a un service tiers ajoute a la hate.
+              Utilisez ce formulaire pour nous écrire. Le message prépare un email vers {CONTACT_EMAIL} afin de rester
+              simple, direct et sans dépendance à un service tiers ajouté à la hâte.
             </p>
 
             <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
@@ -83,7 +83,7 @@ const Contact = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="contact-company">Societe ou contexte</Label>
+                <Label htmlFor="contact-company">Société ou contexte</Label>
                 <Input
                   id="contact-company"
                   value={company}
@@ -112,13 +112,13 @@ const Contact = () => {
                   className="text-sm text-primary hover:underline"
                   onClick={() => trackEvent("click_email", { source: "/contact", email: CONTACT_EMAIL })}
                 >
-                  Ecrire directement a {CONTACT_EMAIL}
+                  Écrire directement à {CONTACT_EMAIL}
                 </a>
               </div>
 
               {submitted ? (
                 <p className="text-sm text-muted-foreground">
-                  Votre client email devrait s'ouvrir avec le message pre-rempli.
+                  Votre client email devrait s'ouvrir avec le message pré-rempli.
                 </p>
               ) : null}
             </form>
@@ -129,7 +129,7 @@ const Contact = () => {
               <div className="w-fit rounded-xl bg-primary/10 p-3 text-primary">
                 <Mail size={20} />
               </div>
-              <h2 className="mt-4 text-xl font-display font-semibold text-foreground">Coordonnees</h2>
+              <h2 className="mt-4 text-xl font-display font-semibold text-foreground">Coordonnées</h2>
               <p className="mt-3 text-sm leading-7 text-muted-foreground">
                 Email:{" "}
                 <a
@@ -148,11 +148,11 @@ const Contact = () => {
               <div className="w-fit rounded-xl bg-primary/10 p-3 text-primary">
                 <ShieldCheck size={20} />
               </div>
-              <h2 className="mt-4 text-xl font-display font-semibold text-foreground">Reassurance</h2>
+              <h2 className="mt-4 text-xl font-display font-semibold text-foreground">Réassurance</h2>
               <ul className="mt-4 space-y-3 text-sm leading-7 text-muted-foreground">
                 <li>Pas de tunnel agressif ni de collecte opaque.</li>
-                <li>Le formulaire sert uniquement a preparer votre message vers l'equipe GIGD.</li>
-                <li>Pour la gestion des donnees, voir la politique de confidentialite.</li>
+                <li>Le formulaire sert uniquement à préparer votre message vers l'équipe GIGD.</li>
+                <li>Pour la gestion des données, voir la politique de confidentialité.</li>
               </ul>
             </section>
           </aside>

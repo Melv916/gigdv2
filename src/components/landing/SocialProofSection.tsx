@@ -1,17 +1,17 @@
-﻿import { motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Shield, BookOpen, Eye } from "lucide-react";
 
 const items = [
-  { icon: Shield, label: "Mode V2", desc: "Acces produit immediat" },
-  { icon: BookOpen, label: "Methode versionnee", desc: "Transparence sur les calculs" },
-  { icon: Eye, label: "Hypotheses visibles", desc: "Chaque hypothese est explicite" },
+  { icon: Shield, label: "Mode V2", desc: "Accès produit immédiat" },
+  { icon: BookOpen, label: "Méthode versionnée", desc: "Transparence sur les calculs" },
+  { icon: Eye, label: "Hypothèses visibles", desc: "Chaque hypothèse est explicite" },
 ];
 
 export function SocialProofSection() {
   return (
     <section className="py-16 border-y border-border/30">
       <div className="container">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {items.map((item, i) => (
             <motion.div
               key={item.label}
@@ -35,4 +35,3 @@ export function SocialProofSection() {
     </section>
   );
 }
-

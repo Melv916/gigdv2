@@ -7,53 +7,81 @@
   position: absolute;
   inset: 0;
   background-image:
-    radial-gradient(circle at 18% 14%, rgba(47, 140, 255, 0.22), transparent 40%),
-    radial-gradient(circle at 80% 8%, rgba(34, 211, 238, 0.12), transparent 34%),
-    linear-gradient(180deg, rgba(11, 20, 36, 0.28) 0%, rgba(11, 20, 36, 0.78) 100%),
+    radial-gradient(circle at 16% 8%, rgba(47, 140, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 84% 0%, rgba(34, 211, 238, 0.12), transparent 26%),
+    linear-gradient(180deg, rgba(11, 20, 36, 0.24) 0%, rgba(11, 20, 36, 0.86) 100%),
     url("/assets/home-premium-bg.png");
   background-size: cover;
   background-position: center;
-  filter: saturate(1.05) blur(0.2px);
-  opacity: 0.82;
+  opacity: 0.84;
   pointer-events: none;
+  filter: saturate(1.02);
+}
+
+.analysis-cockpit-page::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(123, 150, 189, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(123, 150, 189, 0.06) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.8), transparent 78%);
+  opacity: 0.22;
+}
+
+.analysis-cockpit-card,
+.analysis-cockpit-subcard {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 24px 64px rgba(0, 0, 0, 0.42);
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.analysis-cockpit-card::before,
+.analysis-cockpit-subcard::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 18%),
+    radial-gradient(circle at top right, rgba(47, 140, 255, 0.08), transparent 28%);
 }
 
 .analysis-cockpit-card {
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  background: linear-gradient(180deg, rgba(16, 28, 51, 0.94) 0%, rgba(16, 28, 51, 0.84) 100%);
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5);
-  transition: transform 200ms ease, border-color 200ms ease;
-}
-
-.analysis-cockpit-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(47, 140, 255, 0.28);
+  background:
+    linear-gradient(180deg, rgba(16, 28, 51, 0.95) 0%, rgba(11, 20, 36, 0.92) 100%);
 }
 
 .analysis-cockpit-subcard {
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  background: linear-gradient(180deg, rgba(22, 36, 61, 0.95) 0%, rgba(22, 36, 61, 0.82) 100%);
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.46);
-  transition: transform 200ms ease, border-color 200ms ease;
+  background:
+    linear-gradient(180deg, rgba(22, 36, 61, 0.94) 0%, rgba(14, 25, 44, 0.9) 100%);
 }
 
+.analysis-cockpit-card:hover,
 .analysis-cockpit-subcard:hover {
   transform: translateY(-2px);
-  border-color: rgba(47, 140, 255, 0.28);
+  border-color: rgba(47, 140, 255, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 30px 72px rgba(0, 0, 0, 0.46);
 }
 
 .analysis-label {
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 12px;
-  opacity: 0.62;
-  color: #d8e5ff;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  color: rgba(214, 229, 255, 0.58);
 }
 
 .analysis-icon {
-  opacity: 0.85;
+  opacity: 0.88;
   color: #9cc5ff;
   transition: color 200ms ease;
 }
@@ -74,82 +102,88 @@
 }
 
 .analysis-verdict {
-  font-size: 2rem;
+  position: relative;
+  font-size: clamp(1.4rem, 2vw, 1.9rem);
   line-height: 1;
   font-weight: 800;
-  padding: 0.95rem 1.15rem;
-  border-radius: 14px;
+  padding: 1rem 1.2rem;
+  border-radius: 1.2rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  letter-spacing: 0.03em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .analysis-verdict-positive {
-  color: #86efac;
-  background: rgba(34, 197, 94, 0.16);
+  color: #92f2b5;
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.18), rgba(16, 185, 129, 0.08));
 }
 
 .analysis-verdict-negative {
-  color: #fca5a5;
-  background: rgba(239, 68, 68, 0.14);
+  color: #f8aaaa;
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.16), rgba(239, 68, 68, 0.08));
 }
 
 .analysis-verdict-neutral {
-  color: #93c5fd;
-  background: rgba(47, 140, 255, 0.14);
+  color: #9dccff;
+  background: linear-gradient(180deg, rgba(47, 140, 255, 0.16), rgba(47, 140, 255, 0.08));
 }
 
 .analysis-kpi {
-  font-size: clamp(1.75rem, 2.2vw, 2.25rem);
+  font-family: "Inter Tight", "Manrope", "Inter", sans-serif;
+  font-size: clamp(1.85rem, 2.4vw, 2.55rem);
   font-weight: 700;
-  line-height: 1.1;
-  color: #f1f6ff;
-  margin-top: 0.35rem;
+  letter-spacing: -0.06em;
+  line-height: 0.98;
+  color: #f2f7ff;
+  margin-top: 0.5rem;
 }
 
 .analysis-kpi-box {
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(255, 255, 255, 0.015);
-  padding: 0.8rem;
-  transition: transform 200ms ease, border-color 200ms ease;
+  border-radius: 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 0.95rem;
+  transition: transform 200ms ease, border-color 200ms ease, background-color 200ms ease;
 }
 
 .analysis-kpi-box:hover {
   transform: translateY(-2px);
-  border-color: rgba(47, 140, 255, 0.28);
+  border-color: rgba(47, 140, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .analysis-yield-badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.2rem 0.5rem;
+  padding: 0.28rem 0.58rem;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 .analysis-yield-badge-ok {
-  color: #86efac;
-  background: rgba(34, 197, 94, 0.16);
+  color: #92f2b5;
+  background: rgba(16, 185, 129, 0.14);
 }
 
 .analysis-yield-badge-low {
-  color: #fbbf24;
-  background: rgba(245, 158, 11, 0.16);
+  color: #f7ca6b;
+  background: rgba(245, 158, 11, 0.14);
 }
 
 .analysis-yield-badge-high {
-  color: #67e8f9;
-  background: rgba(34, 211, 238, 0.16);
+  color: #84e9f8;
+  background: rgba(34, 211, 238, 0.14);
 }
 
 .analysis-threshold-row {
-  margin-top: 0.75rem;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 0.8rem;
+  border-radius: 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
   background: rgba(7, 13, 25, 0.42);
-  padding: 0.95rem 1rem;
+  padding: 1rem 1.05rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -158,37 +192,39 @@
 }
 
 .analysis-line-item {
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  background: rgba(255, 255, 255, 0.02);
-  padding: 0.65rem 0.85rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 0.82rem 0.95rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
 }
 
 .analysis-list {
   margin: 0;
   padding-left: 1rem;
   color: #cbd8ef;
-  font-size: 0.9rem;
-  line-height: 1.55;
+  font-size: 0.92rem;
+  line-height: 1.65;
   display: grid;
-  gap: 0.4rem;
+  gap: 0.45rem;
 }
 
 .analysis-chart-wrap {
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(7, 13, 25, 0.4);
-  padding: 0.8rem;
+  border-radius: 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(180deg, rgba(8, 14, 26, 0.48), rgba(8, 14, 26, 0.24));
+  padding: 1rem;
 }
 
 .analysis-line-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.7rem 1rem;
-  margin-top: 0.65rem;
+  gap: 0.8rem 1.1rem;
+  margin-top: 0.8rem;
   font-size: 11px;
   color: #9fb2d1;
 }
@@ -196,7 +232,7 @@
 .analysis-line-legend span {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .analysis-line-legend i {
@@ -207,11 +243,11 @@
 }
 
 .analysis-tooltip {
-  border-radius: 10px;
+  border-radius: 0.95rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #101c33;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
-  padding: 0.55rem 0.65rem;
+  background: rgba(16, 28, 51, 0.98);
+  box-shadow: 0 20px 38px rgba(0, 0, 0, 0.42);
+  padding: 0.7rem 0.8rem;
   min-width: 220px;
 }
 
@@ -241,57 +277,91 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
+  border-radius: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.025);
   color: #a7b7d4;
   font-size: 12px;
   font-weight: 600;
-  padding: 0.38rem 0.75rem;
-  transition: transform 200ms ease, border-color 200ms ease, color 200ms ease;
+  padding: 0.5rem 0.8rem;
+  transition: transform 200ms ease, border-color 200ms ease, color 200ms ease, background-color 200ms ease;
 }
 
 .analysis-tab-btn:hover {
   transform: translateY(-2px);
-  border-color: rgba(47, 140, 255, 0.26);
+  border-color: rgba(47, 140, 255, 0.22);
   color: #d8e7ff;
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .analysis-tab-btn-active {
   color: #d7e8ff;
-  border-color: rgba(47, 140, 255, 0.4);
-  background: rgba(47, 140, 255, 0.16);
+  border-color: rgba(47, 140, 255, 0.34);
+  background: rgba(47, 140, 255, 0.12);
 }
 
 .analysis-script-line {
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(255, 255, 255, 0.02);
-  padding: 0.85rem;
-  font-size: 0.92rem;
-  line-height: 1.6;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.95rem 1rem;
+  font-size: 0.93rem;
+  line-height: 1.7;
   color: #cfdbf0;
   font-style: italic;
 }
 
 .analysis-history-row {
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   background: rgba(255, 255, 255, 0.02);
 }
 
 .analysis-history-row:hover {
-  border-color: rgba(47, 140, 255, 0.24);
+  border-color: rgba(47, 140, 255, 0.22);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .analysis-v2-text {
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
   line-height: 1.9;
 }
 
+.analysis-cockpit-page table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.analysis-cockpit-page table thead th {
+  color: rgba(204, 221, 246, 0.58);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
+
+.analysis-cockpit-page table tbody tr {
+  transition: background-color 180ms ease;
+}
+
+.analysis-cockpit-page table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
 @media (max-width: 768px) {
+  .analysis-cockpit-page {
+    padding-top: 0.75rem;
+  }
+
   .analysis-verdict {
-    font-size: 1.3rem;
-    padding: 0.72rem 0.9rem;
+    font-size: 1.15rem;
+    padding: 0.76rem 0.9rem;
+  }
+
+  .analysis-kpi {
+    font-size: 1.8rem;
+  }
+
+  .analysis-cockpit-card,
+  .analysis-cockpit-subcard {
+    border-radius: 1.3rem;
   }
 }

@@ -4,13 +4,41 @@ import { motion } from "framer-motion";
 import { Link2, Target, BarChart3, AlertTriangle, FileText, MessageSquare, Download, Settings } from "lucide-react";
 
 const steps = [
-  { icon: Link2, title: "Coller l'annonce", desc: "Collez le lien d'une annonce locative. GIGD extrait automatiquement les informations cles : prix, surface, localisation, DPE." },
-  { icon: Target, title: "Choisir la strategie", desc: "Location nue, meublee, colocation ou location courte duree. Les calculs s'adaptent a votre strategie." },
-  { icon: Settings, title: "Renseigner vos hypotheses", desc: "Travaux, charges, taxe fonciere, vacance locative et financement pour personnaliser l'analyse." },
-  { icon: BarChart3, title: "Calculs complets", desc: "Rendements, cash-flow, fiscalite, DSCR, TRI et VAN avec details transparents et hypotheses affichees." },
-  { icon: AlertTriangle, title: "Points a verifier", desc: "Informations manquantes, incoherences potentielles, documents a demander avant offre." },
-  { icon: MessageSquare, title: "Negociation guidee", desc: "Recommandations de positionnement et questions a poser, differenciees agence vs particulier." },
-  { icon: Download, title: "Export decision", desc: "Conservez un recapitulatif des chiffres et de l'analyse IA pour partager ou archiver." },
+  {
+    icon: Link2,
+    title: "Coller l'annonce",
+    desc: "Collez le lien d'une annonce locative. GIGD extrait automatiquement les informations clés : prix, surface, localisation, DPE.",
+  },
+  {
+    icon: Target,
+    title: "Choisir la stratégie",
+    desc: "Location nue, meublée, colocation ou location courte durée. Les calculs s'adaptent à votre stratégie.",
+  },
+  {
+    icon: Settings,
+    title: "Renseigner vos hypothèses",
+    desc: "Travaux, charges, taxe foncière, vacance locative et financement pour personnaliser l'analyse.",
+  },
+  {
+    icon: BarChart3,
+    title: "Calculs complets",
+    desc: "Rendements, cash-flow, fiscalité, DSCR, TRI et VAN avec détails transparents et hypothèses affichées.",
+  },
+  {
+    icon: AlertTriangle,
+    title: "Points à vérifier",
+    desc: "Informations manquantes, incohérences potentielles, documents à demander avant offre.",
+  },
+  {
+    icon: MessageSquare,
+    title: "Négociation guidée",
+    desc: "Recommandations de positionnement et questions à poser, différenciées agence vs particulier.",
+  },
+  {
+    icon: Download,
+    title: "Export décision",
+    desc: "Conservez un récapitulatif des chiffres et de l'analyse IA pour partager ou archiver.",
+  },
 ];
 
 const Produit = () => {
@@ -18,7 +46,7 @@ const Produit = () => {
     <PageLayout>
       <Seo
         title="Produit GIGD"
-        description="Fonctionnalites de GIGD pour importer une annonce, analyser un bien locatif et lire les KPI utiles a la decision."
+        description="Fonctionnalités de GIGD pour importer une annonce, analyser un bien locatif et lire les KPI utiles à la décision."
         pathname="/produit"
       />
       <section className="py-24">
@@ -30,10 +58,10 @@ const Produit = () => {
           >
             <span className="text-xs font-semibold uppercase tracking-wider text-primary">Produit</span>
             <h1 className="mt-3 text-4xl md:text-5xl font-display font-bold text-foreground">
-              Le parcours complet, de l'annonce a la decision locative
+              Le parcours complet, de l'annonce à la décision locative
             </h1>
             <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              GIGD V2 couvre uniquement l'investissement locatif: location nue, meublee, colocation et LCD.
+              GIGD V2 couvre uniquement l'investissement locatif: location nue, meublée, colocation et LCD.
             </p>
           </motion.div>
 
@@ -70,15 +98,15 @@ const Produit = () => {
             <div className="glass-card rounded-xl p-6 md:p-8">
               <h3 className="text-xl font-display font-semibold text-foreground">Exemples concrets</h3>
               <p className="text-sm text-muted-foreground mt-2">
-                Ces blocs sont relies aux boutons de la home pour illustrer chaque usage.
+                Ces blocs sont reliés aux boutons de la home pour illustrer chaque usage.
               </p>
 
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <article id="exemple-database" className="rounded-xl border border-border/40 bg-card/40 p-4 scroll-mt-24">
                   <p className="text-xs uppercase tracking-wider text-primary">Database</p>
                   <h4 className="mt-1 text-base font-semibold text-foreground">Extraction annonce + DVF</h4>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Exemple: T3, Lyon 3e, 72m2. GIGD recoupe prix affiche, mediane DVF locale et loyers observables.
+                    Exemple: T3, Lyon 3e, 72m2. GIGD recoupe prix affiché, médiane DVF locale et loyers observables.
                   </p>
                 </article>
 
@@ -86,15 +114,15 @@ const Produit = () => {
                   <p className="text-xs uppercase tracking-wider text-primary">API Collections</p>
                   <h4 className="mt-1 text-base font-semibold text-foreground">Pipeline de calculs</h4>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Exemple: appel sequentiel import, enrichissement marche, calcul TRI/VAN, puis synthese decision.
+                    Exemple: appel séquentiel import, enrichissement marché, calcul TRI/VAN, puis synthèse décision.
                   </p>
                 </article>
 
                 <article id="exemple-nego" className="rounded-xl border border-border/40 bg-card/40 p-4 scroll-mt-24">
-                  <p className="text-xs uppercase tracking-wider text-primary">Scripts de nego</p>
+                  <p className="text-xs uppercase tracking-wider text-primary">Scripts de négo</p>
                   <h4 className="mt-1 text-base font-semibold text-foreground">Trame agence vs particulier</h4>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Exemple: "Le prix cible est 265k EUR car les charges copro degradent le cash-flow de 85 EUR/mois."
+                    Exemple: "Le prix cible est 265k EUR car les charges copro dégradent le cash-flow de 85 EUR/mois."
                   </p>
                 </article>
 
@@ -102,7 +130,7 @@ const Produit = () => {
                   <p className="text-xs uppercase tracking-wider text-primary">Analyse risque</p>
                   <h4 className="mt-1 text-base font-semibold text-foreground">Points de vigilance</h4>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Exemple: DPE E, travaux 8k-15k EUR, charges elevees, loyer surestime par rapport au quartier.
+                    Exemple: DPE E, travaux 8k-15k EUR, charges élevées, loyer surestimé par rapport au quartier.
                   </p>
                 </article>
               </div>
@@ -116,9 +144,9 @@ const Produit = () => {
             className="max-w-3xl mx-auto mt-12 gradient-border glass-card rounded-xl p-6 text-center"
           >
             <FileText size={24} className="mx-auto mb-3 text-secondary" />
-            <h3 className="text-lg font-display font-semibold text-foreground mb-2">Fiscalite parametrable</h3>
+            <h3 className="text-lg font-display font-semibold text-foreground mb-2">Fiscalité paramétrable</h3>
             <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-              Regimes micro et reel, LMNP et SCI, avec hypotheses explicites. GIGD fournit une aide au cadrage, pas un conseil fiscal.
+              Régimes micro et réel, LMNP et SCI, avec hypothèses explicites. GIGD fournit une aide au cadrage, pas un conseil fiscal.
             </p>
           </motion.div>
         </div>
