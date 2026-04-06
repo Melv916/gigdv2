@@ -37,7 +37,7 @@ describe("tax comparison integration", () => {
           "cashflowBeforeTax": -3860,
           "coherenceWithObjective": "Coherent si l'objectif est de maximiser le cash-flow apres impot rapidement.",
           "complexity": "standard",
-          "netNetYield": -0.0187015503875969,
+          "netNetYield": 0.042926356589147285,
           "notes": [
             "Charges reelles, interets d'emprunt et travaux deductibles retenus.",
           ],
@@ -52,7 +52,7 @@ describe("tax comparison integration", () => {
           "cashflowBeforeTax": -3860,
           "coherenceWithObjective": "Coherent si l'objectif est de maximiser le cash-flow apres impot rapidement.",
           "complexity": "standard",
-          "netNetYield": -0.03807093023255814,
+          "netNetYield": 0.023556976744186046,
           "notes": [
             "Abattement forfaitaire de 30% applique sur les loyers encaisses.",
           ],

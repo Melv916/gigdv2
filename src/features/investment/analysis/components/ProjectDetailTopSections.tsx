@@ -39,6 +39,7 @@ type EditableProjectSettings = {
   financement: string;
   frais_notaire_pct: number;
   vacance_locative: number;
+  charges_non_recup: number;
   croissance_valeur: number;
   croissance_loyers: number;
   taux_interet: number;
@@ -81,6 +82,15 @@ export function ProjectSettingsPanel(props: ProjectSettingsPanelProps) {
             type="number"
             value={props.project.vacance_locative}
             onChange={(e) => props.onUpdate("vacance_locative", +e.target.value)}
+            className="h-9 border-border/50 bg-muted/30 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Charges non récup. / mois (€)</Label>
+          <Input
+            type="number"
+            value={props.project.charges_non_recup}
+            onChange={(e) => props.onUpdate("charges_non_recup", +e.target.value)}
             className="h-9 border-border/50 bg-muted/30 text-sm"
           />
         </div>
@@ -255,7 +265,7 @@ export function AnalysisInputCard(props: AnalysisInputCardProps) {
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Charges/mois (€)</Label>
+          <Label className="text-xs">Charges propriétaire / mois (€)</Label>
           <Input
             type="number"
             value={props.chargesMensuelles || ""}
@@ -289,7 +299,7 @@ export function AnalysisInputCard(props: AnalysisInputCardProps) {
 
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="space-y-1">
-          <Label className="text-xs">Autres coûts (€)</Label>
+          <Label className="text-xs">Autres coûts d'acquisition (€)</Label>
           <Input
             type="number"
             value={props.autresCouts || ""}

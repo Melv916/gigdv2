@@ -21,7 +21,12 @@ export const sciIrEngine: TaxEngine = {
       corporateTax: 0,
       dividendsTax: 0,
       postTaxCashflow: roundTaxResult(postTaxCashflow),
-      netNetYield: computeNetNetYield(postTaxCashflow, context.input),
+      netNetYield: computeNetNetYield(
+        context.economic.effectiveAnnualRent,
+        context.economic.annualCharges,
+        incomeTax + socialContributions,
+        context.input,
+      ),
       notes: ["Simulation d'une SCI translucide avec remontée du resultat chez l'associe."],
       warnings: ["La repartition entre associes et les cas de holding ne sont pas modelises ici."],
       assumptions: ["Les prelevements sociaux sont appliques au niveau de l'investisseur."],

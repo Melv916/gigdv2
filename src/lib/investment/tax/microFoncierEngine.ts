@@ -21,7 +21,12 @@ export const microFoncierEngine: TaxEngine = {
       corporateTax: 0,
       dividendsTax: 0,
       postTaxCashflow: roundTaxResult(postTaxCashflow),
-      netNetYield: computeNetNetYield(postTaxCashflow, context.input),
+      netNetYield: computeNetNetYield(
+        context.economic.effectiveAnnualRent,
+        context.economic.annualCharges,
+        incomeTax + socialContributions,
+        context.input,
+      ),
       notes: ["Abattement forfaitaire de 30% applique sur les loyers encaisses."],
       warnings: [],
       assumptions: ["Les charges reelles ne sont pas deduites en micro-foncier."],

@@ -17,7 +17,7 @@ import { TaxRegimeInfoCard } from "./TaxRegimeInfoCard";
 
 const exploitationLabels = {
   location_nue: "Location nue",
-  location_meublee: "Meublé",
+  location_meublee: "Meuble",
   colocation: "Colocation",
   location_courte_duree: "LCD",
 } as const;
@@ -29,12 +29,14 @@ const ownershipLabels: Record<OwnershipMode, string> = {
   sci_avec_holding: "SCI avec holding",
 };
 
+const visibleOwnershipModes: OwnershipMode[] = ["nom_propre", "sci"];
+
 const objectiveLabels: Record<InvestorObjective, string> = {
-  cashflow_immediat: "Cash immédiat",
+  cashflow_immediat: "Cash immediat",
   patrimoine_long_terme: "Patrimoine",
-  reinvestissement_societe: "Réinvestissement",
+  reinvestissement_societe: "Reinvestissement",
   optimisation_fiscale: "Optimisation fiscale",
-  remontee_tresorerie: "Remontée de cash",
+  remontee_tresorerie: "Remontee de cash",
 };
 
 interface TaxSimulationCardProps {
@@ -63,24 +65,29 @@ function selectBtn(active: boolean) {
 
 export function TaxSimulationCard(props: TaxSimulationCardProps) {
   const planLabel =
-    props.plan === "avance" ? "Avancé" : props.plan === "investisseur" ? "Investisseur" : "Free / Débutant";
+    props.plan === "avance" ? "Avance" : props.plan === "investisseur" ? "Investisseur" : "Free / Debutant";
+  const annualTaxAmount = props.primaryAnalysis
+    ? props.primaryAnalysis.fiscal.taxAmount +
+      props.primaryAnalysis.fiscal.socialContributions +
+      props.primaryAnalysis.fiscal.dividendsTax
+    : 0;
 
   return (
     <div className="analysis-cockpit-card p-6 md:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="analysis-label mb-2">Simulation fiscale</p>
-          <h3 className="text-xl font-display font-bold text-foreground">Lecture fiscale et comparatif de régimes</h3>
+          <h3 className="text-xl font-display font-bold text-foreground">Lecture fiscale et comparatif de regimes</h3>
         </div>
         <span className="rounded-full border border-border/50 px-3 py-1 text-xs text-muted-foreground">
-          Plan: {planLabel}
+          Plan : {planLabel}
         </span>
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-4">
           <div className="analysis-cockpit-subcard p-5">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Étape 1</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Etape 1</p>
             <h4 className="mt-1 text-sm font-semibold text-foreground">Comment exploitez-vous ce bien ?</h4>
             <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
               {Object.entries(exploitationLabels).map(([key, label]) => (
@@ -97,10 +104,10 @@ export function TaxSimulationCard(props: TaxSimulationCardProps) {
           </div>
 
           <div className="analysis-cockpit-subcard p-5">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Étape 2</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Etape 2</p>
             <h4 className="mt-1 text-sm font-semibold text-foreground">Comment achetez-vous ?</h4>
             <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-              {(Object.keys(ownershipLabels) as OwnershipMode[]).map((mode) => (
+              {visibleOwnershipModes.map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -114,16 +121,16 @@ export function TaxSimulationCard(props: TaxSimulationCardProps) {
           </div>
 
           <div className="analysis-cockpit-subcard p-5">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Étape 3</p>
-            <h4 className="mt-1 text-sm font-semibold text-foreground">Quel régime voulez-vous tester ?</h4>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Etape 3</p>
+            <h4 className="mt-1 text-sm font-semibold text-foreground">Quel regime voulez-vous tester ?</h4>
             {props.paywallRequired ? (
               <div className="mt-4 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4">
                 <p className="text-sm text-foreground">
-                  La couche fiscale détaillée est réservée aux plans Investisseur et Avancé.
+                  La couche fiscale detaillee est reservee aux plans Investisseur et Avance.
                 </p>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Le plan Free conserve la lecture économique brute. Passez au plan supérieur pour débloquer
-                  les régimes fiscaux, le cash-flow après impôt et le comparatif.
+                  Le plan Free conserve la lecture economique brute. Passez au plan superieur pour debloquer les regimes fiscaux,
+                  le cash-flow apres impot et le comparatif.
                 </p>
                 <Button asChild variant="hero" size="sm" className="mt-4">
                   <Link to="/app/abonnement">Voir les abonnements</Link>
@@ -157,7 +164,7 @@ export function TaxSimulationCard(props: TaxSimulationCardProps) {
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Prélèvements sociaux (%)</Label>
+                    <Label className="text-xs">Prelevements sociaux (%)</Label>
                     <Input
                       type="number"
                       step="0.1"
@@ -216,21 +223,21 @@ export function TaxSimulationCard(props: TaxSimulationCardProps) {
                       checked={props.taxSettings.amortizationEnabled}
                       onCheckedChange={(checked) => props.onChange("amortizationEnabled", checked === true)}
                     />
-                    Amortissements activés
+                    Amortissements actives
                   </label>
                   <label className="flex items-center gap-2">
                     <Checkbox
                       checked={props.taxSettings.reducedCorporateTaxEligible}
                       onCheckedChange={(checked) => props.onChange("reducedCorporateTaxEligible", checked === true)}
                     />
-                    Taux IS réduit éligible
+                    Taux IS reduit eligible
                   </label>
                   <label className="flex items-center gap-2">
                     <Checkbox
                       checked={props.taxSettings.reinvestInsteadOfDistribute}
                       onCheckedChange={(checked) => props.onChange("reinvestInsteadOfDistribute", checked === true)}
                     />
-                    Réinvestir au lieu de distribuer
+                    Reinvestir au lieu de distribuer
                   </label>
                 </div>
               </>
@@ -256,40 +263,53 @@ export function TaxSimulationCard(props: TaxSimulationCardProps) {
 
       {!props.paywallRequired && props.primaryAnalysis && (
         <div className="mt-6 space-y-4">
-          <div className="grid gap-3 md:grid-cols-5">
+          <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
             <div className="analysis-cockpit-subcard p-4">
-              <p className="analysis-label">Mode de détention</p>
+              <p className="analysis-label">Mode de detention</p>
               <p className="analysis-kpi text-2xl">{ownershipLabels[props.taxSettings.ownershipMode]}</p>
             </div>
             <div className="analysis-cockpit-subcard p-4">
-              <p className="analysis-label">Régime retenu</p>
+              <p className="analysis-label">Regime retenu</p>
               <p className="analysis-kpi text-2xl">{props.selectedRegimeOption?.label || props.taxSettings.taxRegime}</p>
             </div>
             <div className="analysis-cockpit-subcard p-4">
-              <p className="analysis-label">Base taxable</p>
+              <p className="analysis-label">Base taxable annuelle</p>
               <p className="analysis-kpi text-2xl">{props.formatEUR(props.primaryAnalysis.fiscal.taxableIncome)}</p>
             </div>
             <div className="analysis-cockpit-subcard p-4">
-              <p className="analysis-label">Impôt estimé</p>
-              <p className="analysis-kpi text-2xl">
-                {props.formatEUR(
-                  props.primaryAnalysis.fiscal.taxAmount +
-                    props.primaryAnalysis.fiscal.socialContributions +
-                    props.primaryAnalysis.fiscal.dividendsTax,
-                )}
-              </p>
+              <p className="analysis-label">Impot estime annuel</p>
+              <p className="analysis-kpi text-2xl">{props.formatEUR(annualTaxAmount)}</p>
             </div>
             <div className="analysis-cockpit-subcard p-4">
-              <p className="analysis-label">Cash-flow après impôt</p>
+              <p className="analysis-label">Cash-flow apres impot annuel</p>
               <p className="analysis-kpi text-2xl">{props.formatEUR(props.primaryAnalysis.fiscal.postTaxCashflow)}</p>
+            </div>
+            <div className="analysis-cockpit-subcard p-4">
+              <p className="analysis-label">Cash-flow apres impot mensuel</p>
+              <p className="analysis-kpi text-2xl">{props.formatEUR(props.primaryAnalysis.fiscal.postTaxCashflow / 12)}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="analysis-cockpit-subcard p-4">
+              <p className="analysis-label">Rendement net-net annuel</p>
+              <p className="analysis-kpi text-2xl">{props.formatPct(props.primaryAnalysis.fiscal.netNetYield * 100)}</p>
+            </div>
+            <div className="analysis-cockpit-subcard p-4">
+              <p className="analysis-label">Complexite</p>
+              <p className="analysis-kpi text-2xl">{props.primaryAnalysis.fiscal.complexity}</p>
+            </div>
+            <div className="analysis-cockpit-subcard p-4">
+              <p className="analysis-label">Objectif fiscal</p>
+              <p className="text-sm text-foreground mt-2">{props.primaryAnalysis.fiscal.coherenceWithObjective}</p>
             </div>
           </div>
 
           <div className="analysis-cockpit-subcard p-5">
-            <h4 className="text-sm font-semibold text-foreground">Hypothèses et avertissements</h4>
+            <h4 className="text-sm font-semibold text-foreground">Hypotheses et avertissements</h4>
             <div className="mt-3 grid gap-4 md:grid-cols-2">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Hypothèses retenues</p>
+                <p className="text-xs font-medium text-muted-foreground">Hypotheses retenues</p>
                 <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                   {props.primaryAnalysis.fiscal.assumptions.map((item) => (
                     <li key={item}>{item}</li>
@@ -310,11 +330,11 @@ export function TaxSimulationCard(props: TaxSimulationCardProps) {
           <div className="analysis-cockpit-subcard p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h4 className="text-sm font-semibold text-foreground">Comparer un autre régime</h4>
-                <p className="text-xs text-muted-foreground">Jusqu'à 4 régimes compatibles.</p>
+                <h4 className="text-sm font-semibold text-foreground">Comparer un autre regime</h4>
+                <p className="text-xs text-muted-foreground">Jusqu'a 4 regimes compatibles.</p>
               </div>
               <p className="text-xs text-muted-foreground">
-                Rendement net-net: {props.formatPct(props.primaryAnalysis.fiscal.netNetYield * 100)}
+                Rendement net-net annuel : {props.formatPct(props.primaryAnalysis.fiscal.netNetYield * 100)}
               </p>
             </div>
 
@@ -336,15 +356,15 @@ export function TaxSimulationCard(props: TaxSimulationCardProps) {
             </div>
 
             <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
+              <table className="w-full min-w-[760px] text-sm">
                 <thead>
                   <tr className="border-b border-border/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="pb-2 pr-4">Régime</th>
-                    <th className="pb-2 pr-4">CF avant impôt</th>
-                    <th className="pb-2 pr-4">Impôt</th>
-                    <th className="pb-2 pr-4">CF après impôt</th>
-                    <th className="pb-2 pr-4">Rendement net-net</th>
-                    <th className="pb-2 pr-4">Complexité</th>
+                    <th className="pb-2 pr-4">Regime</th>
+                    <th className="pb-2 pr-4">Cash-flow avant impot annuel</th>
+                    <th className="pb-2 pr-4">Impot annuel</th>
+                    <th className="pb-2 pr-4">Cash-flow apres impot annuel</th>
+                    <th className="pb-2 pr-4">Rendement net-net annuel</th>
+                    <th className="pb-2 pr-4">Complexite</th>
                     <th className="pb-2">Notes / alertes</th>
                   </tr>
                 </thead>

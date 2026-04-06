@@ -26,10 +26,15 @@ export function finalizeTaxResult(
   };
 }
 
-export function computeNetNetYield(postTaxCashflow: number, input: CanonicalInvestmentInput): number {
+export function computeNetNetYield(
+  effectiveAnnualRent: number,
+  annualCharges: number,
+  annualTaxAmount: number,
+  input: CanonicalInvestmentInput,
+): number {
   const totalCost = totalAcquisitionCost(input);
   if (totalCost <= 0) return 0;
-  return postTaxCashflow / totalCost;
+  return (effectiveAnnualRent - annualCharges - annualTaxAmount) / totalCost;
 }
 
 export function roundTaxResult(value: number): number {

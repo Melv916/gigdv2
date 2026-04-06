@@ -1,15 +1,13 @@
 import { useState, type ReactNode } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Projection } from "@/lib/calculations";
+import type { Projection } from "@/lib/calculations";
+import type { ProjectAnalysisOutput } from "@/lib/investment/tax";
 import {
   AlertTriangle,
   BarChart3,
   Building2,
   CheckCircle2,
-  FileText,
   MapPin,
   Percent,
-  Tag,
   Target,
   TrendingUp,
   User,
@@ -24,12 +22,6 @@ type AnalysisResult = {
   cashFlow: string;
   scriptParticulier: string[];
   scriptAgence: string[];
-};
-
-type SeuilType = {
-  type: "ld-nue" | "meuble" | "coloc" | "lcd";
-  label: string;
-  seuil: number;
 };
 
 type PointFort = { point: string; impact: string };
@@ -59,17 +51,7 @@ interface AnalysisResultsCardProps {
   aiResult: AnalysisResult;
   title: string;
   strategyLabel: string;
-  hasRentForYield: boolean;
-  rendementBrutCalc: number | null;
-  rendementTargetReached: boolean;
-  rendementAbove10: boolean;
-  minRent8: number;
-  marketPossibleRentMonthly: number;
-  prixCibleRendement8: number;
-  coutGlobalPrixCible: number;
-  ecartNego: number;
-  ecartNegoPct: number;
-  seuilTypes: SeuilType[];
+  analysis: ProjectAnalysisOutput;
   projectStrategie: string;
   adr: number;
   params: ProjectHypotheses | null;
@@ -77,6 +59,8 @@ interface AnalysisResultsCardProps {
   displayedDvf: string;
   marketRentRef: number;
   marketSourceLine: string | null;
+  priceM2Annonce: number;
+  dvfMedianRef: number;
   pointsFortsDecision: PointFort[];
   pointsFaiblesDecision: PointFaible[];
   projections: Projection[];
@@ -89,6 +73,18 @@ interface AnalysisResultsCardProps {
 
 export function AnalysisResultsCard(props: AnalysisResultsCardProps) {
   const [scriptTab, setScriptTab] = useState<"particulier" | "agence">("particulier");
+  const afterTaxMonthly = props.analysis.taxation.cashflowAfterTaxMonthly;
+  const priceGap = props.analysis.pricing.displayedPriceGap;
+  const verdictTone =
+    props.analysis.verdict.status === "favorable"
+      ? "analysis-verdict-positive"
+      : props.analysis.verdict.status === "insuffisant"
+        ? "analysis-verdict-negative"
+        : "analysis-verdict-neutral";
+  const breakEvenOccupancy =
+    props.projectStrategie === "lcd" && props.adr > 0
+      ? Math.ceil((props.analysis.exploitation.breakEvenRentMonthly / props.adr / 30) * 100)
+      : null;
 
   return (
     <div className="analysis-cockpit-card p-6 md:p-8">
@@ -98,173 +94,150 @@ export function AnalysisResultsCard(props: AnalysisResultsCardProps) {
           <h2 className="text-xl md:text-2xl font-display font-bold text-foreground">
             {props.title} · {props.strategyLabel}
           </h2>
+          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">{props.analysis.verdict.summary}</p>
         </div>
-        <div
-          className={`analysis-verdict ${
-            props.aiResult.decision === "FONCEZ"
-              ? "analysis-verdict-positive"
-              : props.aiResult.decision === "TROP CHER"
-                ? "analysis-verdict-negative"
-                : "analysis-verdict-neutral"
-          }`}
-        >
-          {props.aiResult.decision}
-        </div>
+        <div className={`analysis-verdict ${verdictTone}`}>{props.analysis.verdict.label}</div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 xl:grid-cols-5">
         <div className="analysis-cockpit-subcard p-4">
           <p className="analysis-label flex items-center gap-2">
-            <TrendingUp size={14} strokeWidth={1.5} className="analysis-icon" /> Cash-flow
+            <TrendingUp size={14} strokeWidth={1.5} className="analysis-icon" /> Cash-flow avant impot
           </p>
-          <p className="analysis-kpi">{props.aiResult.cashFlow}</p>
+          <p className="analysis-kpi">{props.formatEUR(props.analysis.exploitation.cashflowBeforeTaxMonthly)}</p>
           <p className="text-xs text-muted-foreground">mensuel</p>
         </div>
 
         <div className="analysis-cockpit-subcard p-4">
           <p className="analysis-label flex items-center gap-2">
-            <BarChart3 size={14} strokeWidth={1.5} className="analysis-icon" /> Rendement brut
+            <Percent size={14} strokeWidth={1.5} className="analysis-icon" /> Cash-flow apres impot
           </p>
-          <p className="analysis-kpi">
-            {props.rendementBrutCalc !== null ? props.formatPct(props.rendementBrutCalc) : "n/a"}
-          </p>
-          <div className="flex flex-wrap items-center gap-2 mt-1">
-            <span
-              className={`analysis-yield-badge ${
-                !props.hasRentForYield
-                  ? "analysis-yield-badge-low"
-                  : props.rendementTargetReached
-                    ? "analysis-yield-badge-ok"
-                    : "analysis-yield-badge-low"
-              }`}
-            >
-              {!props.hasRentForYield ? "Indispo (loyer manquant)" : props.rendementTargetReached ? "OK (>= 8%)" : "Sous objectif"}
-            </span>
-            {props.rendementAbove10 && (
-              <span className="analysis-yield-badge analysis-yield-badge-high">Au-dessus de la cible (10%+)</span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            {!props.hasRentForYield ? (
-              "Ajoute un loyer estimé mensuel pour calculer le rendement brut."
-            ) : props.rendementTargetReached ? (
-              "Objectif investisseur atteint (8-10%)."
-            ) : (
-              <>
-                Pour atteindre 8% de rendement brut, il faut un loyer &gt;= <span className="text-primary font-semibold">{props.formatEUR(props.minRent8)}/mois</span>.
-              </>
-            )}
-          </p>
-          <p className="text-[10px] text-muted-foreground mt-1">
-            Rendement brut basé sur loyer estimé (hors charges, vacance, fiscalité).
-          </p>
+          <p className="analysis-kpi">{afterTaxMonthly === null ? "A confirmer" : props.formatEUR(afterTaxMonthly)}</p>
+          <p className="text-xs text-muted-foreground">mensuel</p>
         </div>
 
         <div className="analysis-cockpit-subcard p-4">
           <p className="analysis-label flex items-center gap-2">
-            <Percent size={14} strokeWidth={1.5} className="analysis-icon" /> Loyer possible estimé
+            <BarChart3 size={14} strokeWidth={1.5} className="analysis-icon" /> Brut hors frais
           </p>
-          <p className="analysis-kpi">
-            {props.marketPossibleRentMonthly > 0
-              ? `${props.marketPossibleRentMonthly.toLocaleString("fr-FR")}€/mois`
-              : props.aiResult.loyerEstime}
-          </p>
-          <p className="text-xs text-muted-foreground">marché local (`city_market_prices`)</p>
+          <p className="analysis-kpi">{props.formatPct(props.analysis.exploitation.grossYieldExcludingFees * 100)}</p>
+          <p className="text-xs text-muted-foreground">annuel</p>
         </div>
 
         <div className="analysis-cockpit-subcard p-4">
           <p className="analysis-label flex items-center gap-2">
-            <TrendingUp size={14} strokeWidth={1.5} className="analysis-icon" /> Loyer conseillé (8% brut)
+            <BarChart3 size={14} strokeWidth={1.5} className="analysis-icon" /> Brut acte en main
           </p>
-          <p className="analysis-kpi">
-            {props.minRent8 > 0 ? `${props.minRent8.toLocaleString("fr-FR")}€/mois` : "n/a"}
+          <p className="analysis-kpi">{props.formatPct(props.analysis.exploitation.grossYieldActInHand * 100)}</p>
+          <p className="text-xs text-muted-foreground">annuel</p>
+        </div>
+
+        <div className="analysis-cockpit-subcard p-4">
+          <p className="analysis-label flex items-center gap-2">
+            <BarChart3 size={14} strokeWidth={1.5} className="analysis-icon" /> Net exploitation
           </p>
-          <p className="text-xs text-muted-foreground">Base prix annonce (fallback coût global)</p>
+          <p className="analysis-kpi">{props.formatPct(props.analysis.exploitation.netOperatingYield * 100)}</p>
+          <p className="text-xs text-muted-foreground">annuel</p>
         </div>
       </div>
 
       <div className="analysis-cockpit-subcard p-5 mb-6">
-        <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-          <Target size={14} strokeWidth={1.5} className="analysis-icon" /> Négociation
-        </h4>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Target size={14} strokeWidth={1.5} className="analysis-icon" /> Prix maximum compatible avec l'objectif
+            </h4>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Objectif retenu : {props.formatPct(props.analysis.pricing.targetGrossYieldActInHand * 100)} brut acte en main
+            </p>
+          </div>
+          <span
+            className={`analysis-yield-badge ${
+              props.analysis.pricing.isPriceCompatible ? "analysis-yield-badge-ok" : "analysis-yield-badge-low"
+            }`}
+          >
+            {props.analysis.pricing.isPriceCompatible ? "Prix compatible" : "Prix a renegocier"}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-4 md:grid-cols-4">
           {[
-            { icon: Tag, label: "Prix annonce", value: props.aiResult.prixAnnonce, sub: props.aiResult.prixM2 },
+            { label: "Prix affiche", value: props.formatEUR(props.analysis.acquisition.purchasePrice), sub: props.aiResult.prixM2 },
             {
-              icon: Tag,
-              label: "Prix cible (8% brut)",
-              value: props.hasRentForYield && props.prixCibleRendement8 > 0 ? props.formatEUR(props.prixCibleRendement8) : "n/a",
-              sub: "hors frais",
+              label: "Prix maximum compatible",
+              value: props.formatEUR(props.analysis.pricing.purchasePriceMaxCompatible),
+              sub: "hors ajustement de financement",
             },
             {
-              icon: Tag,
-              label: "Coût global cible",
-              value: props.hasRentForYield && props.prixCibleRendement8 > 0 ? props.formatEUR(props.coutGlobalPrixCible) : "n/a",
-              sub: "prix cible + notaire + travaux",
+              label: "Cout total max compatible",
+              value: props.formatEUR(props.analysis.pricing.totalCostMaxCompatible),
+              sub: "acte en main",
             },
             {
-              icon: Target,
-              label: "Écart négo",
-              value: props.hasRentForYield
-                ? `${props.formatEUR(props.ecartNego)}${props.ecartNegoPct > 0 ? ` (${props.formatPct(props.ecartNegoPct)})` : ""}`
-                : "n/a",
-              sub: !props.hasRentForYield
-                ? "loyer marché indisponible, écart non calculable"
-                : props.ecartNego > 0
-                  ? "capital à négocier pour atteindre 8% brut"
-                  : "pas besoin de négocier (8% brut déjà atteint)",
+              label: "Ecart avec le prix affiche",
+              value: `${priceGap >= 0 ? "+" : "-"}${props.formatEUR(Math.abs(priceGap))}`,
+              sub: props.analysis.pricing.isPriceCompatible ? "sous le seuil objectif" : "negociation recommandee",
             },
-          ].map((s) => (
-            <div key={s.label} className="analysis-kpi-box">
-              <p className="analysis-label flex items-center gap-2">
-                <s.icon size={13} strokeWidth={1.5} className="analysis-icon" /> {s.label}
-              </p>
-              <p className="text-lg md:text-xl font-display font-bold text-foreground mt-2">{s.value}</p>
-              <p className="text-xs text-muted-foreground mt-1">{s.sub}</p>
+          ].map((item) => (
+            <div key={item.label} className="analysis-kpi-box">
+              <p className="analysis-label">{item.label}</p>
+              <p className="text-lg md:text-xl font-display font-bold text-foreground mt-2">{item.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{item.sub}</p>
             </div>
           ))}
         </div>
       </div>
 
-      {props.seuilTypes.length > 0 && (
-        <div className="analysis-cockpit-subcard p-5 mb-6">
-          <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-            <TrendingUp size={14} strokeWidth={1.5} className="analysis-icon" /> Seuil de loyer minimum (cash-flow = 0)
-          </h4>
-          <Tabs defaultValue={props.projectStrategie}>
-            <TabsList className="bg-muted/30">
-              {props.seuilTypes.map((s) => (
-                <TabsTrigger key={s.type} value={s.type}>
-                  {s.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            {props.seuilTypes.map((s) => (
-              <TabsContent key={s.type} value={s.type}>
-                <div className="analysis-threshold-row">
-                  <span className="text-sm text-muted-foreground">
-                    {s.type === "lcd" ? "Revenu minimum mensuel" : s.type === "coloc" ? "Loyer total minimum" : `Loyer minimum (${s.label})`}
-                  </span>
-                  <span className="text-2xl font-display font-bold text-primary">{s.seuil.toLocaleString("fr-FR")}€/mois</span>
-                </div>
-                {s.type === "lcd" && props.adr > 0 && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Occupation minimum : {Math.ceil((s.seuil / props.adr / 30) * 100)}% ({Math.ceil(s.seuil / props.adr)} nuits/mois)
-                  </p>
-                )}
-              </TabsContent>
-            ))}
-          </Tabs>
-          <p className="text-[10px] text-muted-foreground mt-2">
-            Hypothèses utilisées : notaire {props.params?.frais_notaire_pct}%, vacance {props.params?.vacance_locative} mois/an · Méthode v0.1
-          </p>
+      <div className="analysis-cockpit-subcard p-5 mb-6">
+        <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+          <TrendingUp size={14} strokeWidth={1.5} className="analysis-icon" /> Loyer minimum pour cash-flow avant impot = 0
+        </h4>
+        <div className="analysis-threshold-row">
+          <span className="text-sm text-muted-foreground">
+            {props.projectStrategie === "lcd" ? "Revenu minimum mensuel" : "Loyer minimum mensuel"}
+          </span>
+          <span className="text-2xl font-display font-bold text-primary">
+            {props.analysis.exploitation.breakEvenRentMonthly.toLocaleString("fr-FR")} EUR/mois
+          </span>
         </div>
-      )}
+        {breakEvenOccupancy !== null ? (
+          <p className="text-xs text-muted-foreground mt-2">
+            Occupation minimale indicative : {breakEvenOccupancy}% ({Math.ceil(props.analysis.exploitation.breakEvenRentMonthly / props.adr)} nuits/mois)
+          </p>
+        ) : null}
+        <p className="text-[10px] text-muted-foreground mt-2">
+          Integre annuite de credit, charges d'exploitation annuelles et vacance retenue.
+        </p>
+      </div>
+
+      <div className="analysis-cockpit-subcard p-5 mb-6">
+        <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+          <TrendingUp size={14} strokeWidth={1.5} className="analysis-icon" /> Scenarios rapides
+        </h4>
+        <div className="grid gap-3 md:grid-cols-3">
+          {props.analysis.exploitation.scenarios.map((scenario) => (
+            <div key={scenario.key} className="analysis-kpi-box">
+              <p className="analysis-label">{scenario.label}</p>
+              <p className="mt-2 text-lg font-display font-bold text-foreground">
+                {props.formatEUR(scenario.cashflowBeforeTaxMonthly)}/mois
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Cash-flow avant impot</p>
+              <p className="text-xs text-muted-foreground mt-3">
+                Loyer retenu : {props.formatEUR(scenario.selectedRentMonthly)}/mois
+              </p>
+              <p className="text-xs text-muted-foreground">Vacance : {(scenario.vacancyRate * 100).toFixed(1)}%</p>
+              <p className="text-xs text-muted-foreground">Charges : {props.formatEUR(scenario.operatingChargesAnnual)}/an</p>
+              <p className="text-xs text-muted-foreground">
+                Cash-flow apres impot : {scenario.cashflowAfterTaxMonthly === null ? "A confirmer" : `${props.formatEUR(scenario.cashflowAfterTaxMonthly)}/mois`}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 mb-6 lg:grid-cols-2">
         <div className="analysis-cockpit-subcard p-5">
           <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-            <Building2 size={14} strokeWidth={1.5} className="analysis-icon" /> Marché et données clés
+            <Building2 size={14} strokeWidth={1.5} className="analysis-icon" /> Marche et reperes
           </h4>
           <div className="mb-3">
             <span
@@ -276,32 +249,38 @@ export function AnalysisResultsCard(props: AnalysisResultsCardProps) {
                     : "analysis-yield-badge-low"
               }`}
             >
-              Enrichissement marché: {props.marketStatus === "ok" ? "OK" : props.marketStatus === "processing" ? "En cours" : "Indispo"}
+              Enrichissement marche : {props.marketStatus === "ok" ? "OK" : props.marketStatus === "processing" ? "En cours" : "Indispo"}
             </span>
           </div>
           <div className="space-y-2">
             {[
-              { icon: MapPin, label: "Prix moyen marché (ville)", value: props.displayedDvf },
+              { icon: MapPin, label: "Prix moyen marche (ville)", value: props.displayedDvf },
               {
                 icon: TrendingUp,
-                label: "Loyer marché (m2)",
-                value: props.marketRentRef > 0 ? `${Math.round(props.marketRentRef).toLocaleString("fr-FR")}€/m2` : "n/a",
+                label: "Loyer marche",
+                value: props.marketRentRef > 0 ? `${Math.round(props.marketRentRef).toLocaleString("fr-FR")} EUR/m2` : "n/a",
               },
-              { icon: FileText, label: "Cash-flow mensuel", value: props.aiResult.cashFlow },
-            ].map((m) => (
-              <div key={m.label} className="analysis-line-item">
+              {
+                icon: Percent,
+                label: "Prix annonce",
+                value: props.priceM2Annonce > 0 ? `${Math.round(props.priceM2Annonce).toLocaleString("fr-FR")} EUR/m2` : "n/a",
+              },
+            ].map((item) => (
+              <div key={item.label} className="analysis-line-item">
                 <div className="flex items-center gap-2 text-muted-foreground">
-                  <m.icon size={14} strokeWidth={1.5} className="analysis-icon" />
-                  <span className="text-sm">{m.label}</span>
+                  <item.icon size={14} strokeWidth={1.5} className="analysis-icon" />
+                  <span className="text-sm">{item.label}</span>
                 </div>
-                <span className="text-sm font-semibold text-foreground">{m.value}</span>
+                <span className="text-sm font-semibold text-foreground">{item.value}</span>
               </div>
             ))}
           </div>
-          {props.marketSourceLine && <p className="text-[10px] text-muted-foreground mt-1">{props.marketSourceLine}</p>}
-          <p className="text-[10px] text-muted-foreground mt-3 border border-border/40 rounded-full inline-flex px-2 py-0.5">
-            Hypothèses v0.1 · `city_market_prices`
-          </p>
+          {props.dvfMedianRef > 0 && props.priceM2Annonce > 0 ? (
+            <p className="text-xs text-muted-foreground mt-3">
+              Ecart prix/m2 vs reference : {props.formatPct(((props.priceM2Annonce - props.dvfMedianRef) / props.dvfMedianRef) * 100)}
+            </p>
+          ) : null}
+          {props.marketSourceLine ? <p className="text-[10px] text-muted-foreground mt-1">{props.marketSourceLine}</p> : null}
         </div>
 
         <div className="analysis-cockpit-subcard p-5">
@@ -315,13 +294,14 @@ export function AnalysisResultsCard(props: AnalysisResultsCardProps) {
               </p>
               <ul className="analysis-list">
                 {props.pointsFortsDecision.length > 0 ? (
-                  props.pointsFortsDecision.map((g, i) => (
-                    <li key={i}>
-                      <span className="text-foreground">{g.point}</span> <span className="text-green-400">({g.impact})</span>
+                  props.pointsFortsDecision.map((item, index) => (
+                    <li key={`${item.point}-${index}`}>
+                      <span className="text-foreground">{item.point}</span>{" "}
+                      <span className="text-green-400">({item.impact})</span>
                     </li>
                   ))
                 ) : (
-                  <li>Aucun point positif détecté.</li>
+                  <li>Aucun point fort majeur detecte.</li>
                 )}
               </ul>
             </div>
@@ -331,13 +311,14 @@ export function AnalysisResultsCard(props: AnalysisResultsCardProps) {
               </p>
               <ul className="analysis-list">
                 {props.pointsFaiblesDecision.length > 0 ? (
-                  props.pointsFaiblesDecision.map((r, i) => (
-                    <li key={i}>
-                      <span className="text-foreground">{r.flag}</span> <span className="text-amber-400">(Impact : {r.impact})</span>
+                  props.pointsFaiblesDecision.map((item, index) => (
+                    <li key={`${item.flag}-${index}`}>
+                      <span className="text-foreground">{item.flag}</span>{" "}
+                      <span className="text-amber-400">(Impact : {item.impact})</span>
                     </li>
                   ))
                 ) : (
-                  <li>Aucun risque majeur détecté.</li>
+                  <li>Aucun risque majeur detecte.</li>
                 )}
               </ul>
             </div>
@@ -351,39 +332,28 @@ export function AnalysisResultsCard(props: AnalysisResultsCardProps) {
             <TrendingUp size={14} strokeWidth={1.5} className="analysis-icon" /> Projections 5 / 10 / 20 ans
           </h4>
           <div className="grid grid-cols-1 gap-3 mb-4 md:grid-cols-3">
-            {props.projections.map((p) => (
-              <div key={p.annee} className="analysis-kpi-box">
-                <p className="analysis-label mb-2">À {p.annee} ans</p>
+            {props.projections.map((projection) => (
+              <div key={projection.annee} className="analysis-kpi-box">
+                <p className="analysis-label mb-2">A {projection.annee} ans</p>
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Valeur du bien</span>
-                    <span className="text-foreground font-semibold">
-                      {props.formatEUR(p.valeurBien)}{" "}
-                      {props.projectionBase > 0 ? (
-                        <span className="text-cyan-300">({props.formatPct((p.valeurBien / props.projectionBase) * 100)})</span>
-                      ) : null}
-                    </span>
+                    <span className="text-foreground font-semibold">{props.formatEUR(projection.valeurBien)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Capital remboursé</span>
-                    <span className="text-foreground font-semibold">{p.capitalRembourse.toLocaleString("fr-FR")}€</span>
+                    <span className="text-muted-foreground">Capital rembourse</span>
+                    <span className="text-foreground font-semibold">{props.formatEUR(projection.capitalRembourse)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cash-flow cumulé</span>
-                    <span className={`font-semibold ${p.cashFlowCumule >= 0 ? "text-green-400" : "text-destructive"}`}>
-                      {props.formatEUR(p.cashFlowCumule)}{" "}
-                      {props.projectionBase > 0 ? (
-                        <span className="text-cyan-300">({props.formatPct((p.cashFlowCumule / props.projectionBase) * 100)})</span>
-                      ) : null}
+                    <span className="text-muted-foreground">Cash-flow cumule</span>
+                    <span className={`font-semibold ${projection.cashFlowCumule >= 0 ? "text-green-400" : "text-destructive"}`}>
+                      {props.formatEUR(projection.cashFlowCumule)}
                     </span>
                   </div>
                   <div className="flex justify-between border-t border-border/30 pt-1 mt-1">
-                    <span className="text-muted-foreground">Valeur nette créée</span>
-                    <span className={`font-bold ${p.valeurNette >= 0 ? "text-primary" : "text-destructive"}`}>
-                      {props.formatEUR(p.valeurNette)}{" "}
-                      {props.projectionBase > 0 ? (
-                        <span className="text-cyan-300">({props.formatPct((p.valeurNette / props.projectionBase) * 100)})</span>
-                      ) : null}
+                    <span className="text-muted-foreground">Valeur nette creee</span>
+                    <span className={`font-bold ${projection.valeurNette >= 0 ? "text-primary" : "text-destructive"}`}>
+                      {props.formatEUR(projection.valeurNette)}
                     </span>
                   </div>
                 </div>
@@ -410,11 +380,11 @@ export function AnalysisResultsCard(props: AnalysisResultsCardProps) {
                   dataKey="annee"
                   domain={[0, 20]}
                   ticks={[0, 5, 10, 15, 20]}
-                  tickFormatter={(v) => `${v} ans`}
+                  tickFormatter={(value) => `${value} ans`}
                   stroke="rgba(219,232,255,0.75)"
                   fontSize={11}
                 />
-                <YAxis stroke="rgba(219,232,255,0.75)" fontSize={11} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+                <YAxis stroke="rgba(219,232,255,0.75)" fontSize={11} tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
                 <Tooltip content={props.renderProjectionTooltip} />
                 <Area type="monotone" dataKey="valeurNette" stroke="#2F8CFF" strokeWidth={3} fill="url(#netGradient)" />
                 <Area type="monotone" dataKey="cashFlowCumule" stroke="#22D3EE" strokeWidth={2.5} fill="url(#cashGradient)" />
@@ -431,24 +401,93 @@ export function AnalysisResultsCard(props: AnalysisResultsCardProps) {
           </div>
           <div className="analysis-line-legend">
             <span>
-              <i style={{ background: "#2F8CFF" }} /> Valeur nette créée
+              <i style={{ background: "#2F8CFF" }} /> Valeur nette creee
             </span>
             <span>
-              <i style={{ background: "#22D3EE" }} /> Cash-flow cumulé
+              <i style={{ background: "#22D3EE" }} /> Cash-flow cumule
             </span>
             <span>
               <i style={{ background: "#8fb5ff" }} /> Valeur du bien
             </span>
           </div>
           <p className="text-[10px] text-muted-foreground mt-2">
-            Hypothèses : valeur +{props.params?.croissance_valeur}%/an, loyers +{props.params?.croissance_loyers}%/an, charges +{props.params?.inflation_charges}%/an · Méthode v0.1
+            Hypotheses : valeur +{props.params?.croissance_valeur}%/an, loyers +{props.params?.croissance_loyers}%/an, charges +{props.params?.inflation_charges}%/an
           </p>
         </div>
       )}
 
+      <div className="analysis-cockpit-subcard p-5 mb-6">
+        <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+          <Percent size={14} strokeWidth={1.5} className="analysis-icon" /> Fiscalite
+        </h4>
+        <div className="grid gap-3 md:grid-cols-4">
+          <div className="analysis-kpi-box">
+            <p className="analysis-label">Impot estime</p>
+            <p className="mt-2 text-lg font-display font-bold text-foreground">
+              {props.analysis.taxation.annualTaxAmount === null ? "A confirmer" : props.formatEUR(props.analysis.taxation.annualTaxAmount)}
+            </p>
+            <p className="text-xs text-muted-foreground">annuel</p>
+          </div>
+          <div className="analysis-kpi-box">
+            <p className="analysis-label">Rendement net-net</p>
+            <p className="mt-2 text-lg font-display font-bold text-foreground">
+              {props.analysis.taxation.netNetYield === null ? "A confirmer" : props.formatPct(props.analysis.taxation.netNetYield * 100)}
+            </p>
+            <p className="text-xs text-muted-foreground">annuel</p>
+          </div>
+          <div className="analysis-kpi-box">
+            <p className="analysis-label">Regime fiscal</p>
+            <p className="mt-2 text-lg font-display font-bold text-foreground">{props.analysis.taxation.taxRegime}</p>
+            <p className="text-xs text-muted-foreground">retenu</p>
+          </div>
+          <div className="analysis-kpi-box">
+            <p className="analysis-label">TMI / IS</p>
+            <p className="mt-2 text-lg font-display font-bold text-foreground">
+              {props.formatPct(props.analysis.taxation.tmi * 100)} · {props.formatPct(props.analysis.taxation.corporateTaxRate * 100)}
+            </p>
+            <p className="text-xs text-muted-foreground">parametres fiscaux</p>
+          </div>
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-3">{props.analysis.taxation.definitionNetNetYield}</p>
+      </div>
+
+      {props.analysis.patrimonial.projections.length > 0 ? (
+        <div className="analysis-cockpit-subcard p-5 mb-6">
+          <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+            <Building2 size={14} strokeWidth={1.5} className="analysis-icon" /> Lecture patrimoniale
+          </h4>
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="analysis-kpi-box">
+              <p className="analysis-label">Capital rembourse</p>
+              <p className="mt-2 text-lg font-display font-bold text-foreground">
+                {props.analysis.patrimonial.capitalRepaid === null ? "n/a" : props.formatEUR(props.analysis.patrimonial.capitalRepaid)}
+              </p>
+            </div>
+            <div className="analysis-kpi-box">
+              <p className="analysis-label">Tresorerie cumulee</p>
+              <p className="mt-2 text-lg font-display font-bold text-foreground">
+                {props.analysis.patrimonial.cumulativePostTaxTreasury === null ? "n/a" : props.formatEUR(props.analysis.patrimonial.cumulativePostTaxTreasury)}
+              </p>
+            </div>
+            <div className="analysis-kpi-box">
+              <p className="analysis-label">Valeur nette creee</p>
+              <p className="mt-2 text-lg font-display font-bold text-foreground">
+                {props.analysis.patrimonial.netValueCreated === null ? "n/a" : props.formatEUR(props.analysis.patrimonial.netValueCreated)}
+              </p>
+            </div>
+            <div className="analysis-kpi-box">
+              <p className="analysis-label">Sortie potentielle</p>
+              <p className="mt-2 text-lg font-display font-bold text-foreground">
+                {props.analysis.patrimonial.potentialExitValue === null ? "n/a" : props.formatEUR(props.analysis.patrimonial.potentialExitValue)}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="analysis-cockpit-subcard p-5">
         <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-          <Target size={14} strokeWidth={1.5} className="analysis-icon" /> Scripts de négociation
+          <Target size={14} strokeWidth={1.5} className="analysis-icon" /> Scripts de negotiation
         </h4>
         <div className="flex gap-2 mb-3">
           <button
@@ -465,9 +504,9 @@ export function AnalysisResultsCard(props: AnalysisResultsCardProps) {
           </button>
         </div>
         <div className="space-y-2">
-          {(scriptTab === "particulier" ? props.aiResult.scriptParticulier : props.aiResult.scriptAgence)?.map((s, i) => (
-            <div key={i} className="analysis-script-line">
-              {s}
+          {(scriptTab === "particulier" ? props.aiResult.scriptParticulier : props.aiResult.scriptAgence)?.map((line, index) => (
+            <div key={`${scriptTab}-${index}`} className="analysis-script-line">
+              {line}
             </div>
           ))}
         </div>

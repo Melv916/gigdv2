@@ -27,7 +27,12 @@ export const sciIsEngine: TaxEngine = {
       corporateTax: roundTaxResult(corporateTax),
       dividendsTax: 0,
       postTaxCashflow: roundTaxResult(postTaxCashflow),
-      netNetYield: computeNetNetYield(postTaxCashflow, context.input),
+      netNetYield: computeNetNetYield(
+        context.economic.effectiveAnnualRent,
+        context.economic.annualCharges,
+        corporateTax,
+        context.input,
+      ),
       notes: ["Simulation a l'IS avec amortissements de l'immeuble et du mobilier quand applicable."],
       warnings: ["La fiscalite de revente et la distribution future de dividendes sont simplifiees."],
       assumptions: ["Le taux reduit d'IS est applique si l'option est activee."],

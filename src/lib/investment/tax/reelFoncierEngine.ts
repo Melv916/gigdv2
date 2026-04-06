@@ -21,7 +21,12 @@ export const reelFoncierEngine: TaxEngine = {
       corporateTax: 0,
       dividendsTax: 0,
       postTaxCashflow: roundTaxResult(postTaxCashflow),
-      netNetYield: computeNetNetYield(postTaxCashflow, context.input),
+      netNetYield: computeNetNetYield(
+        context.economic.effectiveAnnualRent,
+        context.economic.annualCharges,
+        incomeTax + socialContributions,
+        context.input,
+      ),
       notes: ["Charges reelles, interets d'emprunt et travaux deductibles retenus."],
       warnings: ["Le traitement precis du deficit foncier n'est pas detaille dans cette simulation."],
       assumptions: ["Les travaux sont integres integralement sur l'exercice simule."],

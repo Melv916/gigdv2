@@ -1,5 +1,4 @@
-﻿import { useEffect, useState } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,10 +8,6 @@ import { motion } from "framer-motion";
 import { FileText, Home, Loader2 } from "lucide-react";
 import {
   calcFraisNotaire,
-  calcCoutGlobal,
-  calcMensualiteCredit,
-  calcAssuranceMensuelle,
-  calcSeuilLoyerMinimum,
   calcProjections,
   type ProjectParams,
   type Projection,
@@ -20,6 +15,7 @@ import {
 import { getMe, importAnalysisUrl } from "@/lib/v2/api";
 import { fetchRentEstimate } from "@/lib/investment/api";
 import {
+  computeProjectAnalysis,
   TAX_REGIME_OPTIONS,
   analyzeInvestment,
   buildCanonicalInvestmentInput,
@@ -29,6 +25,7 @@ import {
   normalizeAppPlan,
   resolveTaxCompatibilityDiagnostics,
   type AppPlan,
+  type ProjectAnalysisOutput,
   type InvestmentAnalysis,
   type InvestorObjective,
   type OwnershipMode,
@@ -42,7 +39,6 @@ import {
   type MarketData,
   type PropertyData,
 } from "@/lib/market/cityMarketPipeline";
-import { buildAnalysisKpiModel } from "@/features/investment/analysis/kpiModel";
 import { AnalysisResultsCard } from "@/features/investment/analysis/components/AnalysisResultsCard";
 import { TaxSimulationCard } from "@/features/investment/analysis/components/TaxSimulationCard";
 import {
@@ -158,28 +154,40 @@ function readNum(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function mapStrategyToRentalStrategy(strategy: string): "nue" | "meublee" | "coloc" | "lcd" {
+  if (strategy === "ld-nue") return "nue";
+  if (strategy === "coloc") return "coloc";
+  if (strategy === "lcd") return "lcd";
+  return "meublee";
+}
+
 function buildFallbackAnalysisResult(args: {
+  analysis: ProjectAnalysisOutput;
   prix: number;
   surface: number;
-  loyerMensuel: number;
-  mensualiteTotale: number;
-  coutGlobal: number;
   dvfMedian: number | null;
-  vacanceLocativeMois: number;
-  chargesMensuelles: number;
-  chargesNonRecup: number;
-  taxeFonciere: number;
 }): AnalysisResult {
   const prixM2 = args.surface > 0 ? Math.round(args.prix / args.surface) : 0;
-  const rendementBrut = args.coutGlobal > 0 ? (args.loyerMensuel * 12 * 100) / args.coutGlobal : 0;
-  const revenuMensuelEffectif = (args.loyerMensuel * (12 - args.vacanceLocativeMois)) / 12;
-  const chargesMensuellesTotales = args.chargesMensuelles + args.chargesNonRecup + (args.taxeFonciere / 12);
-  const cash = revenuMensuelEffectif - chargesMensuellesTotales - args.mensualiteTotale;
-  const decision = cash >= 100 ? "FONCEZ" : cash >= 0 ? "NEGOCIER" : "TROP CHER";
-  const redFlags: { flag: string; impact: string }[] = [];
+  const redFlags = args.analysis.warnings
+    .filter((warning) => warning.severity !== "info")
+    .map((warning) => ({
+      flag: warning.message,
+      impact: warning.blockingForVerdict ? "Avertissement bloquant" : "Point de vigilance",
+    }));
+  const goodPoints: { point: string; impact: string }[] = [];
 
-  if (!args.loyerMensuel) redFlags.push({ flag: "Loyer non renseigné", impact: "Rendement et cash-flow sous-estimés" });
-  if (cash < 0) redFlags.push({ flag: "Cash-flow mensuel négatif", impact: `${formatEur(Math.abs(cash))}/mois` });
+  if (args.analysis.verdict.status === "favorable") {
+    goodPoints.push({
+      point: "Objectif de rendement respecté",
+      impact: `${formatPct(args.analysis.exploitation.grossYieldActInHand * 100)} acte en main`,
+    });
+  }
+  if (args.analysis.exploitation.cashflowBeforeTaxMonthly >= 0) {
+    goodPoints.push({
+      point: "Exploitation au moins à l'équilibre",
+      impact: `${formatEUR(args.analysis.exploitation.cashflowBeforeTaxMonthly)}/mois avant impôt`,
+    });
+  }
   if (args.dvfMedian && prixM2 > args.dvfMedian) {
     redFlags.push({
       flag: "Prix au m² supérieur à la médiane DVF",
@@ -187,34 +195,27 @@ function buildFallbackAnalysisResult(args: {
     });
   }
 
-  const prixCibleDvf = args.dvfMedian && args.surface > 0
-    ? Math.round(args.dvfMedian * args.surface * 0.97)
-    : null;
-  const prixMaxAchat = prixCibleDvf && prixCibleDvf > 0
-    ? Math.min(args.prix, prixCibleDvf)
-    : Math.max(0, args.prix - Math.max(5000, args.prix * 0.05));
-
   return {
-    decision,
+    decision: args.analysis.verdict.label.toUpperCase(),
     prixAnnonce: formatEur(args.prix),
-    prixMax: formatEur(prixMaxAchat),
+    prixMax: formatEur(args.analysis.pricing.purchasePriceMaxCompatible),
     prixM2: `${prixM2.toLocaleString("fr-FR")}€/m²`,
     prixM2Dvf: args.dvfMedian ? `${Math.round(args.dvfMedian).toLocaleString("fr-FR")}€/m²` : "n/a",
     score: "n/a",
-    rendement: `${rendementBrut.toFixed(2)}%`,
-    loyerEstime: `${Math.round(args.loyerMensuel).toLocaleString("fr-FR")}€/mois`,
-    cashFlow: `${Math.round(cash).toLocaleString("fr-FR")}€/mois`,
-    seuilLoyer: `${Math.round(args.mensualiteTotale).toLocaleString("fr-FR")}€/mois`,
+    rendement: `${(args.analysis.exploitation.grossYieldActInHand * 100).toFixed(2)}%`,
+    loyerEstime: `${Math.round(args.analysis.exploitation.selectedRentMonthly).toLocaleString("fr-FR")}€/mois`,
+    cashFlow: `${Math.round(args.analysis.exploitation.cashflowBeforeTaxMonthly).toLocaleString("fr-FR")}€/mois`,
+    seuilLoyer: `${Math.round(args.analysis.exploitation.breakEvenRentMonthly).toLocaleString("fr-FR")}€/mois`,
     occupationMin: "n/a",
     redFlags,
-    goodPoints: [],
+    goodPoints,
     scriptParticulier: [
-      "Je peux avancer rapidement si les justificatifs sont complets.",
-      "Mon offre intègre les charges, les travaux et le risque de vacance.",
+      "Mon offre tient compte du coût acte en main et des charges réellement supportées.",
+      "Je peux avancer rapidement si les données structurantes sont confirmées.",
     ],
     scriptAgence: [
-      "Je me base sur les comparables DVF et une enveloppe travaux réaliste.",
-      "Je peux signer vite si le prix tient compte des risques identifiés.",
+      "Je me base sur un coût global complet, un loyer crédible et un cash-flow prudent.",
+      "Je peux avancer si le prix s'aligne avec le rendement cible acte en main.",
     ],
   };
 }
@@ -225,15 +226,27 @@ function inferTypology(surface: number, pieces?: number | null): "all" | "t1t2" 
   return "all";
 }
 
+function normalizeOwnershipMode(mode: OwnershipMode | null | undefined): OwnershipMode {
+  if (mode === "holding" || mode === "sci_avec_holding") return "sci";
+  return mode || "nom_propre";
+}
+
+function sanitizeTaxSettings(input: ProjectTaxSettingsInput): ProjectTaxSettingsInput {
+  return {
+    ...input,
+    ownershipMode: normalizeOwnershipMode(input.ownershipMode),
+  };
+}
+
 function hydrateTaxSettings(project: Project | null): ProjectTaxSettingsInput {
   const exploitationMode = mapProjectStrategyToExploitationMode(project?.strategie || "meuble");
   const defaults = defaultTaxSettings(exploitationMode);
   const amortization = project?.amortization_settings_json || {};
 
-  return {
+  return sanitizeTaxSettings({
     ...defaults,
     exploitationMode: (project?.exploitation_mode as ProjectTaxSettingsInput["exploitationMode"]) || defaults.exploitationMode,
-    ownershipMode: project?.ownership_mode || defaults.ownershipMode,
+    ownershipMode: normalizeOwnershipMode(project?.ownership_mode || defaults.ownershipMode),
     taxRegime: project?.default_tax_regime || defaults.taxRegime,
     investorObjective: project?.investor_objective || defaults.investorObjective,
     tmi: Number(project?.tmi ?? defaults.tmi),
@@ -260,7 +273,7 @@ function hydrateTaxSettings(project: Project | null): ProjectTaxSettingsInput {
     furnitureAmortizationYears: Number(
       amortization?.furnitureAmortizationYears ?? defaults.furnitureAmortizationYears,
     ),
-  };
+  });
 }
 
 type ProjectDraft = {
@@ -328,14 +341,23 @@ const ProjectDetail = () => {
   const requestedAnalysisId = searchParams.get("analysis");
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
+  const taxSettingsTouchedRef = useRef(false);
+
+  const applyHydratedTaxSettings = (nextSettings: ProjectTaxSettingsInput) => {
+    taxSettingsTouchedRef.current = false;
+    setTaxSettings(sanitizeTaxSettings(nextSettings));
+  };
 
   const loadSavedAnalysis = (analysis: any) => {
     const result = analysis.analysis_result as AnalysisResult | null;
     const savedListing = analysis.listing_data as any;
+    const savedTaxSettings = analysis.tax_settings_json
+      ? sanitizeTaxSettings(analysis.tax_settings_json as ProjectTaxSettingsInput)
+      : null;
 
     if (savedListing) setListing(savedListing);
-    if (analysis.tax_settings_json) {
-      setTaxSettings(analysis.tax_settings_json as ProjectTaxSettingsInput);
+    if (savedTaxSettings) {
+      applyHydratedTaxSettings(savedTaxSettings);
     }
     if (analysis.tax_analysis_json) {
       setTaxAnalysis(analysis.tax_analysis_json as InvestmentAnalysis);
@@ -347,7 +369,7 @@ const ProjectDetail = () => {
       setComparisonRegimes(
         ((analysis.tax_comparison_json as TaxComparisonRow[]) || [])
           .map((row) => row.regime)
-          .filter((regime) => regime !== (analysis.tax_settings_json as ProjectTaxSettingsInput | null)?.taxRegime)
+          .filter((regime) => regime !== savedTaxSettings?.taxRegime)
           .slice(0, 3),
       );
     } else {
@@ -413,7 +435,9 @@ const ProjectDetail = () => {
         if (data) {
           const typedProject = data as unknown as Project;
           setProject(typedProject);
-          setTaxSettings(hydrateTaxSettings(typedProject));
+          if (!taxSettingsTouchedRef.current) {
+            applyHydratedTaxSettings(hydrateTaxSettings(typedProject));
+          }
         }
         setLoading(false);
       });
@@ -445,6 +469,7 @@ const ProjectDetail = () => {
   useEffect(() => {
     setDraftHydrated(false);
     setDraftMessage("");
+    taxSettingsTouchedRef.current = false;
   }, [id, requestedAnalysisId, user?.id]);
 
   useEffect(() => {
@@ -572,11 +597,96 @@ const ProjectDetail = () => {
     [project],
   );
 
+  const buildProjectAnalysisInput = (args: {
+    price: number;
+    selectedRentMonthly: number;
+    marketRentMonthly: number;
+    annualTaxAmount?: number | null;
+    investmentAnalysis?: InvestmentAnalysis | null;
+  }) => {
+    if (!project || !params) return null;
+
+    const recurringOwnerChargesAnnual = Math.max(0, chargesMensuelles) * 12;
+    const condoChargesAnnualNonRecoverable = Math.max(0, Number(params.charges_non_recup)) * 12;
+    const propertyTaxSource = taxeFonciere > 0 ? "saisie_utilisateur" : "valeur_par_defaut";
+    const operatingChargesSource =
+      recurringOwnerChargesAnnual > 0 || condoChargesAnnualNonRecoverable > 0
+        ? "saisie_utilisateur"
+        : "valeur_par_defaut";
+    const purchasePriceSource = listing?.prix ? "issue_annonce" : manualPrix > 0 ? "saisie_utilisateur" : "valeur_par_defaut";
+    const selectedRentSource =
+      project.strategie === "lcd"
+        ? adr > 0
+          ? "saisie_utilisateur"
+          : "valeur_par_defaut"
+        : args.marketRentMonthly > 0 && Math.abs(args.marketRentMonthly - args.selectedRentMonthly) <= 1
+          ? "estimation_moteur"
+          : args.selectedRentMonthly > 0
+            ? "saisie_utilisateur"
+            : "valeur_par_defaut";
+
+    return {
+      acquisition: {
+        purchasePrice: args.price,
+        notaryRate: Number(params.frais_notaire_pct) / 100,
+        works: travaux,
+        acquisitionFeesOther: autresCouts,
+        furnishing: taxSettings.furnitureAmount,
+      },
+      financing: {
+        downPayment: params.financement === "credit" ? Math.max(0, Number(params.apport)) : 0,
+        interestRate: Number(params.taux_interet) / 100,
+        insuranceRate: Number(params.assurance_emprunteur) / 100,
+        durationYears: params.financement === "credit" ? Number(params.duree_credit) : 0,
+      },
+      rental: {
+        strategy: mapStrategyToRentalStrategy(project.strategie),
+        marketRentMonthly: args.marketRentMonthly,
+        currentRentMonthly: 0,
+        selectedRentMonthly: args.selectedRentMonthly,
+        vacancyRate: Math.max(0, Number(params.vacance_locative) / 12),
+      },
+      operating: {
+        condoChargesAnnualNonRecoverable,
+        propertyTaxAnnual: Math.max(0, taxeFonciere),
+        pnoAnnual: Math.max(0, taxSettings.insurance),
+        managementAnnual: Math.max(0, taxSettings.managementFees),
+        accountingAnnual: Math.max(0, taxSettings.accountingFees),
+        maintenanceAnnual: 0,
+        otherAnnual: recurringOwnerChargesAnnual,
+      },
+      tax: {
+        holdingMode: taxSettings.ownershipMode,
+        taxRegime: taxSettings.taxRegime,
+        tmi: taxSettings.tmi,
+        socialTaxRate: taxSettings.socialRate,
+        corporateTaxRate: taxSettings.corporateTaxRate,
+        annualTaxAmount: args.annualTaxAmount ?? null,
+        investmentAnalysis: args.investmentAnalysis ?? null,
+      },
+      sources: {
+        purchasePrice: purchasePriceSource,
+        selectedRentMonthly: selectedRentSource,
+        vacancyRate: "saisie_utilisateur",
+        propertyTaxAnnual: propertyTaxSource,
+        condoChargesAnnualNonRecoverable:
+          condoChargesAnnualNonRecoverable > 0 ? "saisie_utilisateur" : "valeur_par_defaut",
+        operatingChargesAnnual: operatingChargesSource,
+        strategy: "saisie_utilisateur",
+        interestRate: params.financement === "credit" ? "saisie_utilisateur" : "valeur_par_defaut",
+        durationYears: params.financement === "credit" ? "saisie_utilisateur" : "valeur_par_defaut",
+        taxRegime: "saisie_utilisateur",
+      },
+      targetGrossYieldActInHand: 0.08,
+    } as const;
+  };
+
   const updateTaxSettings = <K extends keyof ProjectTaxSettingsInput>(
     key: K,
     value: ProjectTaxSettingsInput[K],
   ) => {
-    setTaxSettings((current) => ({ ...current, [key]: value }));
+    taxSettingsTouchedRef.current = true;
+    setTaxSettings((current) => sanitizeTaxSettings({ ...current, [key]: value } as ProjectTaxSettingsInput));
   };
 
   const taxDiagnostics = useMemo(
@@ -626,7 +736,7 @@ const ProjectDetail = () => {
     }
 
     if (!availableRegimes.includes(taxSettings.taxRegime)) {
-      setTaxSettings((current) => ({ ...current, taxRegime: availableRegimes[0] }));
+      setTaxSettings((current) => sanitizeTaxSettings({ ...current, taxRegime: availableRegimes[0] }));
     }
 
     setComparisonRegimes((current) =>
@@ -779,21 +889,6 @@ const ProjectDetail = () => {
 
       setAnalysisStep("analyzing");
 
-      // Recompute financing figures from the actual analyzed price/surface (not stale UI state).
-      const fraisNotaireLocal = calcFraisNotaire(prix, params.frais_notaire_pct);
-      const coutGlobalLocal = calcCoutGlobal(prix, fraisNotaireLocal, travaux, autresCouts);
-      const capitalEmprunteLocal =
-        params.financement === "credit" ? Math.max(0, coutGlobalLocal - params.apport) : 0;
-      const mensualiteCreditLocal =
-        params.financement === "credit"
-          ? calcMensualiteCredit(capitalEmprunteLocal, params.taux_interet, params.duree_credit)
-          : 0;
-      const assuranceMensuelleLocal =
-        params.financement === "credit"
-          ? calcAssuranceMensuelle(capitalEmprunteLocal, params.assurance_emprunteur)
-          : 0;
-      const mensualiteTotaleLocal = mensualiteCreditLocal + assuranceMensuelleLocal;
-
       const rentM2FromCityTable =
         type === "house"
           ? Number(
@@ -817,13 +912,23 @@ const ProjectDetail = () => {
         marketRentMonthly,
       });
 
-      // Always prioritize city_market_prices for URL-imported listings.
-      let loyerPourCalc = marketRentMonthly > 0 ? marketRentMonthly : (loyerEstime || 0);
-      if (marketRentMonthly > 0) {
+      const lcdRevenueMonthly =
+        project.strategie === "lcd" && adr > 0
+          ? Math.round(adr * 30 * (Math.max(0, occupationCible) / 100))
+          : 0;
+
+      // Always prioritize the explicit LCD hypothesis, then market rent, then manual rent.
+      let loyerPourCalc =
+        project.strategie === "lcd"
+          ? lcdRevenueMonthly
+          : marketRentMonthly > 0
+            ? marketRentMonthly
+            : (loyerEstime || 0);
+      if (project.strategie !== "lcd" && marketRentMonthly > 0) {
         setLoyerEstime(marketRentMonthly);
       }
 
-      if (!loyerPourCalc && Number(surface) > 0) {
+      if (project.strategie !== "lcd" && !loyerPourCalc && Number(surface) > 0) {
         try {
           const rent = await fetchRentEstimate({
             insee: String((listingData as any)?.insee || "").trim() || undefined,
@@ -845,28 +950,27 @@ const ProjectDetail = () => {
 
       if (!loyerPourCalc) {
         toast({
-          title: "Loyer requis",
-          description: "Loyer de marché introuvable. Renseigne un loyer estimé réel pour lancer l'analyse.",
+          title: project.strategie === "lcd" ? "ADR requis" : "Loyer requis",
+          description:
+            project.strategie === "lcd"
+              ? "Renseigne un ADR et une occupation cible réalistes pour lancer l'analyse LCD."
+              : "Loyer de marché introuvable. Renseigne un loyer estimé réel pour lancer l'analyse.",
           variant: "destructive",
         });
         setAnalysisStep("idle");
         return;
       }
 
-      const fallbackAnalysis = buildFallbackAnalysisResult({
-        prix,
-        surface,
-        loyerMensuel: loyerPourCalc,
-        mensualiteTotale: mensualiteTotaleLocal,
-        coutGlobal: coutGlobalLocal,
-        dvfMedian: Number(normalizedMarket.marketPricePerSqm || 0) || null,
-        vacanceLocativeMois: params.vacance_locative,
-        chargesMensuelles,
-        chargesNonRecup: params.charges_non_recup,
-        taxeFonciere,
+      const baseProjectAnalysisInput = buildProjectAnalysisInput({
+        price: prix,
+        selectedRentMonthly: loyerPourCalc,
+        marketRentMonthly: project.strategie === "lcd" ? 0 : marketRentMonthly,
       });
-
-      setAiResult(fallbackAnalysis);
+      if (!baseProjectAnalysisInput) {
+        setAnalysisStep("idle");
+        return;
+      }
+      const baseProjectAnalysis = computeProjectAnalysis(baseProjectAnalysisInput);
 
       // Calculate projections locally
       const projs = calcProjections(params, prix, loyerPourCalc, chargesMensuelles, taxeFonciere, travaux, autresCouts);
@@ -879,17 +983,20 @@ const ProjectDetail = () => {
         try {
           canonicalInputForSave = buildCanonicalInvestmentInput({
             price: prix,
-            notaryFees: fraisNotaireLocal,
+            notaryFees: baseProjectAnalysis.acquisition.notaryFees,
             worksAmount: travaux,
             annualRent: loyerPourCalc * 12,
-            annualCharges: (chargesMensuelles + params.charges_non_recup) * 12,
+            annualCharges:
+              baseProjectAnalysisInput.operating.condoChargesAnnualNonRecoverable +
+              baseProjectAnalysisInput.operating.maintenanceAnnual +
+              baseProjectAnalysisInput.operating.otherAnnual,
             propertyTax: taxeFonciere,
-            vacancyRate: params.vacance_locative / 12,
-            loanAmount: capitalEmprunteLocal,
-            annualDebtService: mensualiteTotaleLocal * 12,
-            annualBorrowerInsurance: assuranceMensuelleLocal * 12,
-            interestRate: params.taux_interet,
-            durationYears: params.duree_credit,
+            vacancyRate: baseProjectAnalysis.exploitation.vacancyRate,
+            loanAmount: baseProjectAnalysis.financing.loanAmount,
+            annualDebtService: baseProjectAnalysis.financing.annualDebtService,
+            annualBorrowerInsurance: baseProjectAnalysis.financing.monthlyInsurance * 12,
+            interestRate: baseProjectAnalysis.financing.interestRate,
+            durationYears: baseProjectAnalysis.financing.durationYears,
             annualRentGrowthRate: params.croissance_loyers / 100,
             annualValueGrowthRate: params.croissance_valeur / 100,
             annualChargeGrowthRate: params.inflation_charges / 100,
@@ -921,10 +1028,31 @@ const ProjectDetail = () => {
           prix,
           surface,
           loyerPourCalc,
-          mensualiteTotaleLocal,
-          coutGlobalLocal,
+          annualDebtService: baseProjectAnalysis.financing.annualDebtService,
+          coutTotalProjet: baseProjectAnalysis.acquisition.totalProjectCost,
         },
       });
+
+      const annualTaxAmountForSave = taxAnalysisForSave
+        ? taxAnalysisForSave.fiscal.taxAmount +
+          taxAnalysisForSave.fiscal.socialContributions +
+          taxAnalysisForSave.fiscal.dividendsTax
+        : null;
+      const finalProjectAnalysis = computeProjectAnalysis({
+        ...baseProjectAnalysisInput,
+        tax: {
+          ...baseProjectAnalysisInput.tax,
+          annualTaxAmount: annualTaxAmountForSave,
+          investmentAnalysis: taxAnalysisForSave,
+        },
+      });
+      const finalFallbackAnalysis = buildFallbackAnalysisResult({
+        analysis: finalProjectAnalysis,
+        prix,
+        surface,
+        dvfMedian: Number(normalizedMarket.marketPricePerSqm || 0) || null,
+      });
+      setAiResult(finalFallbackAnalysis);
 
       // Save analysis to database
       if (user && project) {
@@ -964,7 +1092,7 @@ const ProjectDetail = () => {
           },
           listing_data: listingData,
           dvf_summary: marketSummary,
-          analysis_result: fallbackAnalysis,
+          analysis_result: finalFallbackAnalysis,
           tax_settings_json: taxSettings,
           tax_analysis_json: taxAnalysisForSave,
           tax_comparison_json: taxComparisonForSave,
@@ -1063,29 +1191,59 @@ const ProjectDetail = () => {
   const isAnalyzing = analysisStep === "scraping" || analysisStep === "analyzing";
   const activePrix = listing?.prix || manualPrix;
   const activeSurface = listing?.surface || manualSurface;
-
-  // Compute financial summary
-  const fraisNotaire = params ? calcFraisNotaire(activePrix, params.frais_notaire_pct) : 0;
-  const coutGlobal = calcCoutGlobal(activePrix, fraisNotaire, travaux, autresCouts);
-  const capitalEmprunte = params?.financement === "credit" ? coutGlobal - (params?.apport || 0) : 0;
-  const mensualiteCredit = params ? calcMensualiteCredit(capitalEmprunte, params.taux_interet, params.duree_credit) : 0;
-  const assuranceMensuelle = params ? calcAssuranceMensuelle(capitalEmprunte, params.assurance_emprunteur) : 0;
+  const selectedRentMonthly =
+    project?.strategie === "lcd"
+      ? (adr > 0 ? Math.round(adr * 30 * (Math.max(0, occupationCible) / 100)) : 0)
+      : loyerEstime;
+  const marketRentMonthly =
+    project?.strategie === "lcd"
+      ? 0
+      : marketData?.marketRentPerSqm && activeSurface > 0
+        ? Math.round(Number(marketData.marketRentPerSqm) * activeSurface)
+        : 0;
+  const baseProjectAnalysisInput =
+    activePrix > 0
+      ? buildProjectAnalysisInput({
+          price: activePrix,
+          selectedRentMonthly,
+          marketRentMonthly,
+        })
+      : null;
+  const baseProjectAnalysis = baseProjectAnalysisInput ? computeProjectAnalysis(baseProjectAnalysisInput) : null;
+  const annualTaxAmount =
+    taxAnalysis
+      ? taxAnalysis.fiscal.taxAmount + taxAnalysis.fiscal.socialContributions + taxAnalysis.fiscal.dividendsTax
+      : null;
+  const projectAnalysis =
+    baseProjectAnalysisInput
+      ? computeProjectAnalysis({
+          ...baseProjectAnalysisInput,
+          tax: {
+            ...baseProjectAnalysisInput.tax,
+            annualTaxAmount,
+            investmentAnalysis: taxAnalysis,
+          },
+        })
+      : null;
   const currentTaxCanonicalInput = useMemo(() => {
-    if (!params || !aiResult || activePrix <= 0 || loyerEstime <= 0) return null;
+    if (!params || !aiResult || !baseProjectAnalysisInput || !baseProjectAnalysis) return null;
 
     return buildCanonicalInvestmentInput({
       price: activePrix,
-      notaryFees: fraisNotaire,
+      notaryFees: baseProjectAnalysis.acquisition.notaryFees,
       worksAmount: travaux,
-      annualRent: loyerEstime * 12,
-      annualCharges: (chargesMensuelles + params.charges_non_recup) * 12,
+      annualRent: selectedRentMonthly * 12,
+      annualCharges:
+        baseProjectAnalysisInput.operating.condoChargesAnnualNonRecoverable +
+        baseProjectAnalysisInput.operating.maintenanceAnnual +
+        baseProjectAnalysisInput.operating.otherAnnual,
       propertyTax: taxeFonciere,
-      vacancyRate: params.vacance_locative / 12,
-      loanAmount: capitalEmprunte,
-      annualDebtService: (mensualiteCredit + assuranceMensuelle) * 12,
-      annualBorrowerInsurance: assuranceMensuelle * 12,
-      interestRate: params.taux_interet,
-      durationYears: params.duree_credit,
+      vacancyRate: baseProjectAnalysis.exploitation.vacancyRate,
+      loanAmount: baseProjectAnalysis.financing.loanAmount,
+      annualDebtService: baseProjectAnalysis.financing.annualDebtService,
+      annualBorrowerInsurance: baseProjectAnalysis.financing.monthlyInsurance * 12,
+      interestRate: baseProjectAnalysis.financing.interestRate,
+      durationYears: baseProjectAnalysis.financing.durationYears,
       annualRentGrowthRate: params.croissance_loyers / 100,
       annualValueGrowthRate: params.croissance_valeur / 100,
       annualChargeGrowthRate: params.inflation_charges / 100,
@@ -1094,13 +1252,10 @@ const ProjectDetail = () => {
   }, [
     aiResult,
     activePrix,
-    assuranceMensuelle,
-    capitalEmprunte,
-    chargesMensuelles,
-    fraisNotaire,
-    loyerEstime,
-    mensualiteCredit,
+    baseProjectAnalysis,
+    baseProjectAnalysisInput,
     params,
+    selectedRentMonthly,
     taxeFonciere,
     taxSettings,
     travaux,
@@ -1154,79 +1309,51 @@ const ProjectDetail = () => {
   if (!project) {
     return <AppLayout><div className="text-center py-20 text-muted-foreground">Projet introuvable.</div></AppLayout>;
   }
-
-  // Seuils by type
-  const seuilTypes = params && activePrix
-    ? (["ld-nue", "meuble", "coloc", "lcd"] as const).map((t) => ({
-        type: t,
-        label: strategieLabels[t],
-        seuil: calcSeuilLoyerMinimum(params, activePrix, travaux, chargesMensuelles, taxeFonciere, autresCouts, t),
-      }))
-    : [];
-
-  const kpiModel = buildAnalysisKpiModel({
-    aiResult,
-    loyerEstime,
-    coutGlobal,
-    activePrix,
-    activeSurface,
-    marketData,
-    marketStatus,
-    travaux,
-    autresCouts,
-    fraisNotairePct: params?.frais_notaire_pct || 0,
-  });
-  const {
-    prixAnnonceNum,
-    basePrixRendement,
-    hasRentForYield,
-    rendementBrutCalc,
-    minRent8,
-    rendementTargetReached,
-    prixCibleRendement8,
-    ecartNego,
-    ecartNegoPct,
-    coutGlobalPrixCible,
-    rendementAbove10,
-    projectionBase,
-    marketRentRef,
-    displayedDvf,
-    marketSourceLine,
-    marketPossibleRentMonthly,
-    cashFlowMensuelNum,
-    priceM2Annonce,
-    dvfMedianRef,
-    marketDataMissing,
-  } = kpiModel;
+  const marketPriceRef = Number(marketData?.marketPricePerSqm || 0);
+  const marketRentRef = Number(marketData?.marketRentPerSqm || 0);
+  const displayedDvf =
+    marketPriceRef > 0
+      ? `${Math.round(marketPriceRef).toLocaleString("fr-FR")} €/m²`
+      : aiResult?.prixM2Dvf || "n/a";
+  const marketSourceLine = marketData?.sourcePrixM2 || marketData?.sourceLoyerM2
+    ? `Source prix: ${marketData?.sourcePrixM2 || "n/a"} · Source loyer: ${marketData?.sourceLoyerM2 || "n/a"}`
+    : null;
+  const prixAnnonceNum = activePrix || readNum(aiResult?.prixAnnonce || 0);
+  const projectionBase = projectAnalysis?.acquisition.totalProjectCost || prixAnnonceNum || 0;
+  const priceM2Annonce = activePrix > 0 && activeSurface > 0 ? activePrix / activeSurface : 0;
+  const dvfMedianRef = marketPriceRef > 0 ? marketPriceRef : readNum(aiResult?.prixM2Dvf || 0);
+  const marketDataMissing = marketStatus !== "ok";
   const pointsFortsDecision: { point: string; impact: string }[] = [];
   const pointsFaiblesDecision: { flag: string; impact: string }[] = [];
 
-  if (!hasRentForYield) {
+  if (!projectAnalysis || projectAnalysis.exploitation.selectedRentMonthly <= 0) {
     pointsFaiblesDecision.push({
-      flag: "Loyer marché indisponible",
-      impact: "Impossible de calculer le rendement brut sans loyer mensuel",
+      flag: "Loyer retenu indisponible",
+      impact: "Impossible de calculer un rendement cohérent sans loyer mensuel retenu",
     });
-  } else if (rendementTargetReached) {
+  } else if (projectAnalysis.exploitation.grossYieldActInHand >= projectAnalysis.pricing.targetGrossYieldActInHand) {
     pointsFortsDecision.push({
-      point: "Rendement brut au niveau cible",
-      impact: `${formatPct(Number(rendementBrutCalc || 0))} (objectif 8%)`,
+      point: "Rendement brut acte en main au niveau cible",
+      impact: `${formatPct(projectAnalysis.exploitation.grossYieldActInHand * 100)} (objectif ${(projectAnalysis.pricing.targetGrossYieldActInHand * 100).toFixed(0)}%)`,
     });
   } else {
     pointsFaiblesDecision.push({
-      flag: "Rendement brut sous cible",
-      impact: `${formatPct(Number(rendementBrutCalc || 0))} ; loyer cible 8%: ${formatEUR(minRent8)}/mois`,
+      flag: "Rendement acte en main sous cible",
+      impact: projectAnalysis
+        ? `${formatPct(projectAnalysis.exploitation.grossYieldActInHand * 100)} ; seuil d'équilibre: ${formatEUR(projectAnalysis.exploitation.breakEvenRentMonthly)}/mois`
+        : "Analyse incomplète",
     });
   }
 
-  if (ecartNego > 0) {
+  if (projectAnalysis && !projectAnalysis.pricing.isPriceCompatible) {
     pointsFaiblesDecision.push({
-      flag: "Positionnement prix à renégocier",
-      impact: `${formatEUR(ecartNego)} à négocier (${formatPct(ecartNegoPct)}) pour atteindre 8% brut`,
+      flag: "Prix affiché au-dessus du maximum compatible",
+      impact: `${formatEUR(Math.abs(projectAnalysis.pricing.displayedPriceGap))} à négocier pour l'objectif retenu`,
     });
-  } else if (hasRentForYield && basePrixRendement > 0 && prixCibleRendement8 > 0) {
+  } else if (projectAnalysis) {
     pointsFortsDecision.push({
-      point: "Prix cohérent avec la cible de rendement",
-      impact: "Pas de négociation requise pour la cible 8% brut",
+      point: "Prix compatible avec l'objectif",
+      impact: "Le prix affiché reste sous le maximum compatible avec l'objectif retenu",
     });
   }
 
@@ -1245,15 +1372,15 @@ const ProjectDetail = () => {
     }
   }
 
-  if (cashFlowMensuelNum > 0) {
+  if ((projectAnalysis?.exploitation.cashflowBeforeTaxMonthly || 0) >= 0) {
     pointsFortsDecision.push({
-      point: "Cash-flow mensuel positif",
-      impact: formatEUR(cashFlowMensuelNum),
+      point: "Cash-flow avant impôt au moins à l'équilibre",
+      impact: projectAnalysis ? formatEUR(projectAnalysis.exploitation.cashflowBeforeTaxMonthly) : "n/a",
     });
   } else {
     pointsFaiblesDecision.push({
-      flag: "Cash-flow mensuel négatif",
-      impact: formatEUR(Math.abs(cashFlowMensuelNum)),
+      flag: "Cash-flow avant impôt négatif",
+      impact: projectAnalysis ? formatEUR(Math.abs(projectAnalysis.exploitation.cashflowBeforeTaxMonthly)) : "n/a",
     });
   }
 
@@ -1276,6 +1403,14 @@ const ProjectDetail = () => {
       impact: "Décision possible mais confiance réduite sur le positionnement local",
     });
   }
+  projectAnalysis?.warnings
+    .filter((warning) => warning.severity !== "info")
+    .forEach((warning) => {
+      pointsFaiblesDecision.push({
+        flag: warning.message,
+        impact: warning.blockingForVerdict ? "A confirmer avant conclusion" : "Hypothèse sensible",
+      });
+    });
   const projectionChartData = projections.map((p) => ({
     ...p,
     valeurBienPct: projectionBase > 0 ? (p.valeurBien / projectionBase) * 100 : null,
@@ -1294,9 +1429,8 @@ const ProjectDetail = () => {
     },
     ...projectionChartData,
   ].sort((a, b) => a.annee - b.annee);
-  const cashflowPositive = cashFlowMensuelNum > 0;
-  const selectedSeuilCashflowZero =
-    seuilTypes.find((s) => s.type === project.strategie)?.seuil ?? 0;
+  const cashflowPositive = (projectAnalysis?.exploitation.cashflowBeforeTaxMonthly || 0) >= 0;
+  const selectedSeuilCashflowZero = projectAnalysis?.exploitation.breakEvenRentMonthly ?? 0;
 
   const renderProjectionTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -1326,7 +1460,6 @@ const ProjectDetail = () => {
       </div>
     );
   };
-
   return (
     <AppLayout>
       <div className="analysis-cockpit-page">
@@ -1383,48 +1516,40 @@ const ProjectDetail = () => {
 
           {listing && <ListingInfoCard listing={listing} />}
 
-          {activePrix > 0 && params && (
+          {baseProjectAnalysis && params && (
             <FinancialSummaryCards
-              fraisNotaire={fraisNotaire}
-              coutGlobal={coutGlobal}
-              mensualiteCredit={mensualiteCredit}
-              assuranceMensuelle={assuranceMensuelle}
-              capitalEmprunte={capitalEmprunte}
+              fraisNotaire={baseProjectAnalysis.acquisition.notaryFees}
+              coutGlobal={baseProjectAnalysis.acquisition.totalProjectCost}
+              mensualiteCredit={baseProjectAnalysis.financing.monthlyPaymentExcludingInsurance}
+              assuranceMensuelle={baseProjectAnalysis.financing.monthlyInsurance}
+              capitalEmprunte={baseProjectAnalysis.financing.loanAmount}
               fraisNotairePct={params.frais_notaire_pct}
               financement={params.financement}
-              dureeCredit={params.duree_credit}
-              tauxInteret={params.taux_interet}
+              dureeCredit={baseProjectAnalysis.financing.durationYears}
+              tauxInteret={baseProjectAnalysis.financing.interestRate * 100}
             />
           )}
 
 	          {/* AI Results */}
-	          {aiResult && (
+	          {aiResult && projectAnalysis && (
 	            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-	              <AnalysisResultsCard
-	                aiResult={aiResult}
-	                title={listing?.titre || project.name}
-	                strategyLabel={strategieLabels[project.strategie]}
-	                hasRentForYield={hasRentForYield}
-	                rendementBrutCalc={rendementBrutCalc}
-	                rendementTargetReached={rendementTargetReached}
-	                rendementAbove10={rendementAbove10}
-	                minRent8={minRent8}
-	                marketPossibleRentMonthly={marketPossibleRentMonthly}
-	                prixCibleRendement8={prixCibleRendement8}
-	                coutGlobalPrixCible={coutGlobalPrixCible}
-	                ecartNego={ecartNego}
-	                ecartNegoPct={ecartNegoPct}
-	                seuilTypes={seuilTypes}
-	                projectStrategie={project.strategie}
-	                adr={adr}
-	                params={params}
-	                marketStatus={marketStatus}
-	                displayedDvf={displayedDvf}
-	                marketRentRef={marketRentRef}
-	                marketSourceLine={marketSourceLine}
-	                pointsFortsDecision={pointsFortsDecision}
-	                pointsFaiblesDecision={pointsFaiblesDecision}
-	                projections={projections}
+		              <AnalysisResultsCard
+		                aiResult={aiResult}
+		                title={listing?.titre || project.name}
+		                strategyLabel={strategieLabels[project.strategie]}
+                    analysis={projectAnalysis}
+		                projectStrategie={project.strategie}
+		                adr={adr}
+		                params={params}
+		                marketStatus={marketStatus}
+		                displayedDvf={displayedDvf}
+		                marketRentRef={marketRentRef}
+		                marketSourceLine={marketSourceLine}
+                    priceM2Annonce={priceM2Annonce}
+                    dvfMedianRef={dvfMedianRef}
+		                pointsFortsDecision={pointsFortsDecision}
+		                pointsFaiblesDecision={pointsFaiblesDecision}
+		                projections={projections}
 	                projectionBase={projectionBase}
 	                projectionCurveData={projectionCurveData}
 	                renderProjectionTooltip={renderProjectionTooltip}
@@ -1499,7 +1624,6 @@ const ProjectDetail = () => {
 	            </motion.div>
 	          )}
 
-          {/* Saved analyses history */}
           {savedAnalyses.length > 0 && (
             <div className="analysis-cockpit-card p-6 mt-6">
               <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -1540,30 +1664,37 @@ const ProjectDetail = () => {
           )}
 
           {/* Deterministic analysis synthesis (no AI call) */}
-          {aiResult && (
+          {aiResult && projectAnalysis && (
             <div className="analysis-cockpit-card p-6 mt-6">
-              <h3 className="text-sm font-semibold text-foreground mb-3">Synthèse d'analyse</h3>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-foreground">Synthèse d'analyse</h3>
+              </div>
               <div className="analysis-v2-text rounded-lg p-5 text-sm text-foreground leading-7 space-y-2">
-                <p>Voici le résumé d'analyse du bien.</p>
+                <p className="font-semibold text-foreground">
+                  Verdict {projectAnalysis.verdict.label.toLowerCase()} · fiabilité {projectAnalysis.reliability.replaceAll("_", " ")}
+                </p>
+                <p>{projectAnalysis.verdict.summary}</p>
                 <p>
-                  Par conséquent, pour un cash-flow = 0, il faudrait un loyer de{" "}
+                  Pour un cash-flow avant impôt à l'équilibre, il faudrait un loyer de{" "}
                   <span className="text-primary font-semibold">{formatEUR(selectedSeuilCashflowZero)}/mois</span>.
                 </p>
                 <p>
-                  Actuellement, votre cash-flow est de{" "}
+                  Le cash-flow avant impôt ressort à{" "}
                   <span className={cashflowPositive ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
-                    {formatEUR(cashFlowMensuelNum)}/mois
+                    {formatEUR(projectAnalysis.exploitation.cashflowBeforeTaxMonthly)}/mois
                   </span>.
                 </p>
-                <p className={cashflowPositive ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
-                  {cashflowPositive
-                    ? "C'est donc un bon investissement."
-                    : "Ce n'est pas un bon placement sans négociation."}
-                </p>
+                {projectAnalysis.taxation.cashflowAfterTaxMonthly !== null ? (
+                  <p>
+                    Après fiscalité, il reste{" "}
+                    <span className={projectAnalysis.taxation.cashflowAfterTaxMonthly >= 0 ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
+                      {formatEUR(projectAnalysis.taxation.cashflowAfterTaxMonthly)}/mois
+                    </span>.
+                  </p>
+                ) : null}
               </div>
             </div>
           )}
-
           <p className="text-[10px] text-muted-foreground text-center mt-6">
             Aide à la décision — à vérifier avant engagement. Méthode v0.1
           </p>
@@ -1575,6 +1706,8 @@ const ProjectDetail = () => {
 };
 
 export default ProjectDetail;
+
+
 
 
 

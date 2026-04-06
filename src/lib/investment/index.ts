@@ -6,3 +6,4 @@ export * from "./taxService";
 export * from "./irrService";
 export * from "./rentService";
 export * from "./dealService";
+export * from "./projectAnalysisEngine";

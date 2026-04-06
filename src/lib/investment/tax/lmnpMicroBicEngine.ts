@@ -23,7 +23,12 @@ export const lmnpMicroBicEngine: TaxEngine = {
       corporateTax: 0,
       dividendsTax: 0,
       postTaxCashflow: roundTaxResult(postTaxCashflow),
-      netNetYield: computeNetNetYield(postTaxCashflow, context.input),
+      netNetYield: computeNetNetYield(
+        context.economic.effectiveAnnualRent,
+        context.economic.annualCharges,
+        incomeTax + socialContributions,
+        context.input,
+      ),
       notes: ["Abattement forfaitaire de 50% applique sur les loyers encaisses en meuble."],
       warnings: ["Le CFE et les cas sociaux specifiques au meuble ne sont pas modelises."],
       assumptions: ["Le regime LMNP micro-BIC est traite ici comme une simulation simplifiee."],

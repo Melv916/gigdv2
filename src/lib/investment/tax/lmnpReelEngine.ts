@@ -24,7 +24,12 @@ export const lmnpReelEngine: TaxEngine = {
       corporateTax: 0,
       dividendsTax: 0,
       postTaxCashflow: roundTaxResult(postTaxCashflow),
-      netNetYield: computeNetNetYield(postTaxCashflow, context.input),
+      netNetYield: computeNetNetYield(
+        context.economic.effectiveAnnualRent,
+        context.economic.annualCharges,
+        incomeTax + socialContributions,
+        context.input,
+      ),
       notes: ["Charges reelles et amortissements retenus pour la simulation LMNP reel."],
       warnings: ["Les plafonds et retraitements comptables d'amortissement restent simplifies."],
       assumptions: ["La valeur terrain n'est pas amortie."],
