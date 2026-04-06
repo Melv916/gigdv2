@@ -187,6 +187,8 @@ type AnalysisInputCardProps = {
   projectStrategie: string;
   analysisStep: "idle" | "scraping" | "analyzing" | "done";
   onRun: () => void;
+  draftMessage?: string;
+  onClearDraft?: () => void;
 };
 
 export function AnalysisInputCard(props: AnalysisInputCardProps) {
@@ -321,6 +323,16 @@ export function AnalysisInputCard(props: AnalysisInputCardProps) {
           "Lancer l'analyse"
         )}
       </Button>
+      {props.draftMessage ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>{props.draftMessage}</span>
+          {props.onClearDraft ? (
+            <button type="button" onClick={props.onClearDraft} className="text-primary transition-colors hover:text-foreground">
+              Effacer le brouillon
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

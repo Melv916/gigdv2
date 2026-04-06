@@ -263,6 +263,25 @@ function hydrateTaxSettings(project: Project | null): ProjectTaxSettingsInput {
   };
 }
 
+type ProjectDraft = {
+  url: string;
+  manualPrix: number;
+  manualSurface: number;
+  manualCity: string;
+  travaux: number;
+  chargesMensuelles: number;
+  taxeFonciere: number;
+  loyerEstime: number;
+  autresCouts: number;
+  adr: number;
+  occupationCible: number;
+  updatedAt: string;
+};
+
+function getProjectDraftStorageKey(userId: string, projectId: string) {
+  return `gigd:project-draft:${userId}:${projectId}`;
+}
+
 const ProjectDetail = () => {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -307,6 +326,8 @@ const ProjectDetail = () => {
   const [savedAnalyses, setSavedAnalyses] = useState<any[]>([]);
   const [loadingAnalyses, setLoadingAnalyses] = useState(false);
   const requestedAnalysisId = searchParams.get("analysis");
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [draftMessage, setDraftMessage] = useState("");
 
   const loadSavedAnalysis = (analysis: any) => {
     const result = analysis.analysis_result as AnalysisResult | null;
@@ -363,6 +384,23 @@ const ProjectDetail = () => {
     setAutresCouts(Number(analysis.autres_couts) || 0);
   };
 
+  const clearDraft = () => {
+    if (!user || !id) return;
+    localStorage.removeItem(getProjectDraftStorageKey(user.id, id));
+    setUrl("");
+    setManualPrix(0);
+    setManualSurface(0);
+    setManualCity("");
+    setTravaux(0);
+    setChargesMensuelles(0);
+    setTaxeFonciere(0);
+    setLoyerEstime(0);
+    setAutresCouts(0);
+    setAdr(0);
+    setOccupationCible(70);
+    setDraftMessage("Brouillon effacé pour ce projet.");
+  };
+
   useEffect(() => {
     if (!user || !id) return;
     supabase
@@ -403,6 +441,107 @@ const ProjectDetail = () => {
         setLoadingAnalyses(false);
       });
   }, [user, id]);
+
+  useEffect(() => {
+    setDraftHydrated(false);
+    setDraftMessage("");
+  }, [id, requestedAnalysisId, user?.id]);
+
+  useEffect(() => {
+    if (!user || !id || requestedAnalysisId || draftHydrated) return;
+    const rawDraft = localStorage.getItem(getProjectDraftStorageKey(user.id, id));
+    if (!rawDraft) {
+      setDraftHydrated(true);
+      return;
+    }
+
+    try {
+      const draft = JSON.parse(rawDraft) as Partial<ProjectDraft>;
+      setUrl(typeof draft.url === "string" ? draft.url : "");
+      setManualPrix(Number(draft.manualPrix) || 0);
+      setManualSurface(Number(draft.manualSurface) || 0);
+      setManualCity(typeof draft.manualCity === "string" ? draft.manualCity : "");
+      setTravaux(Number(draft.travaux) || 0);
+      setChargesMensuelles(Number(draft.chargesMensuelles) || 0);
+      setTaxeFonciere(Number(draft.taxeFonciere) || 0);
+      setLoyerEstime(Number(draft.loyerEstime) || 0);
+      setAutresCouts(Number(draft.autresCouts) || 0);
+      setAdr(Number(draft.adr) || 0);
+      setOccupationCible(Number(draft.occupationCible) || 70);
+
+      const formattedDate =
+        typeof draft.updatedAt === "string" && draft.updatedAt
+          ? new Date(draft.updatedAt).toLocaleString("fr-FR")
+          : null;
+      setDraftMessage(
+        formattedDate
+          ? `Brouillon restauré automatiquement, dernière sauvegarde le ${formattedDate}.`
+          : "Brouillon restauré automatiquement pour ce projet.",
+      );
+    } catch {
+      localStorage.removeItem(getProjectDraftStorageKey(user.id, id));
+    } finally {
+      setDraftHydrated(true);
+    }
+  }, [draftHydrated, id, requestedAnalysisId, user]);
+
+  useEffect(() => {
+    if (!user || !id || !draftHydrated || requestedAnalysisId) return;
+    const hasMeaningfulInput = Boolean(
+      url ||
+        manualPrix ||
+        manualSurface ||
+        manualCity ||
+        travaux ||
+        chargesMensuelles ||
+        taxeFonciere ||
+        loyerEstime ||
+        autresCouts ||
+        adr ||
+        (occupationCible && occupationCible !== 70),
+    );
+
+    if (!hasMeaningfulInput) {
+      localStorage.removeItem(getProjectDraftStorageKey(user.id, id));
+      return;
+    }
+
+    const draft: ProjectDraft = {
+      url,
+      manualPrix,
+      manualSurface,
+      manualCity,
+      travaux,
+      chargesMensuelles,
+      taxeFonciere,
+      loyerEstime,
+      autresCouts,
+      adr,
+      occupationCible,
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(getProjectDraftStorageKey(user.id, id), JSON.stringify(draft));
+    if (!draftMessage) {
+      setDraftMessage("Brouillon sauvegardé automatiquement dans ce projet.");
+    }
+  }, [
+    adr,
+    autresCouts,
+    chargesMensuelles,
+    draftHydrated,
+    draftMessage,
+    id,
+    loyerEstime,
+    manualCity,
+    manualPrix,
+    manualSurface,
+    occupationCible,
+    requestedAnalysisId,
+    taxeFonciere,
+    travaux,
+    url,
+    user,
+  ]);
 
   useEffect(() => {
     if (!requestedAnalysisId || savedAnalyses.length === 0) return;
@@ -1238,6 +1377,8 @@ const ProjectDetail = () => {
             projectStrategie={project.strategie}
             analysisStep={analysisStep}
             onRun={handleAnalyse}
+            draftMessage={draftMessage}
+            onClearDraft={clearDraft}
           />
 
           {listing && <ListingInfoCard listing={listing} />}
