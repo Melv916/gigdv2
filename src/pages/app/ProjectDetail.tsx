@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -265,6 +265,7 @@ function hydrateTaxSettings(project: Project | null): ProjectTaxSettingsInput {
 
 const ProjectDetail = () => {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -305,6 +306,62 @@ const ProjectDetail = () => {
   // Saved analyses history
   const [savedAnalyses, setSavedAnalyses] = useState<any[]>([]);
   const [loadingAnalyses, setLoadingAnalyses] = useState(false);
+  const requestedAnalysisId = searchParams.get("analysis");
+
+  const loadSavedAnalysis = (analysis: any) => {
+    const result = analysis.analysis_result as AnalysisResult | null;
+    const savedListing = analysis.listing_data as any;
+
+    if (savedListing) setListing(savedListing);
+    if (analysis.tax_settings_json) {
+      setTaxSettings(analysis.tax_settings_json as ProjectTaxSettingsInput);
+    }
+    if (analysis.tax_analysis_json) {
+      setTaxAnalysis(analysis.tax_analysis_json as InvestmentAnalysis);
+    } else {
+      setTaxAnalysis(null);
+    }
+    if (analysis.tax_comparison_json) {
+      setTaxComparisonRows(analysis.tax_comparison_json as TaxComparisonRow[]);
+      setComparisonRegimes(
+        ((analysis.tax_comparison_json as TaxComparisonRow[]) || [])
+          .map((row) => row.regime)
+          .filter((regime) => regime !== (analysis.tax_settings_json as ProjectTaxSettingsInput | null)?.taxRegime)
+          .slice(0, 3),
+      );
+    } else {
+      setTaxComparisonRows([]);
+      setComparisonRegimes([]);
+    }
+    if (result) {
+      setAiResult(result);
+      setAnalysisStep("done");
+      setMarketStatus("indisponible");
+      const loyerRaw = String(result.loyerEstime || "0");
+      const loyerMatch = loyerRaw.match(/(\d[\d\s]*)/);
+      const loyerParsed = loyerMatch ? parseFloat(loyerMatch[1].replace(/\s/g, "")) : 0;
+      const lp = Number(analysis.loyer_estime) || loyerParsed || 0;
+      if (params) {
+        setProjections(
+          calcProjections(
+            params,
+            Number(analysis.prix),
+            lp,
+            Number(analysis.charges_mensuelles),
+            Number(analysis.taxe_fonciere),
+            Number(analysis.travaux_estimes),
+            Number(analysis.autres_couts),
+          ),
+        );
+      }
+    }
+    setUrl(analysis.url || "");
+    setTravaux(Number(analysis.travaux_estimes) || 0);
+    setChargesMensuelles(Number(analysis.charges_mensuelles) || 0);
+    setTaxeFonciere(Number(analysis.taxe_fonciere) || 0);
+    setLoyerEstime(Number(analysis.loyer_estime) || 0);
+    setAutresCouts(Number(analysis.autres_couts) || 0);
+  };
 
   useEffect(() => {
     if (!user || !id) return;
@@ -346,6 +403,14 @@ const ProjectDetail = () => {
         setLoadingAnalyses(false);
       });
   }, [user, id]);
+
+  useEffect(() => {
+    if (!requestedAnalysisId || savedAnalyses.length === 0) return;
+    const requestedAnalysis = savedAnalyses.find((analysis) => analysis.id === requestedAnalysisId);
+    if (requestedAnalysis) {
+      loadSavedAnalysis(requestedAnalysis);
+    }
+  }, [requestedAnalysisId, savedAnalyses]);
 
   const params: ProjectParams | null = useMemo(
     () =>
@@ -1306,47 +1371,7 @@ const ProjectDetail = () => {
                   return (
                     <button
                       key={a.id}
-                      onClick={() => {
-                        if (listing) setListing(listing);
-                        if (a.tax_settings_json) {
-                          setTaxSettings(a.tax_settings_json as ProjectTaxSettingsInput);
-                        }
-                        if (a.tax_analysis_json) {
-                          setTaxAnalysis(a.tax_analysis_json as InvestmentAnalysis);
-                        } else {
-                          setTaxAnalysis(null);
-                        }
-                        if (a.tax_comparison_json) {
-                          setTaxComparisonRows(a.tax_comparison_json as TaxComparisonRow[]);
-                          setComparisonRegimes(
-                            ((a.tax_comparison_json as TaxComparisonRow[]) || [])
-                              .map((row) => row.regime)
-                              .filter((regime) => regime !== (a.tax_settings_json as ProjectTaxSettingsInput | null)?.taxRegime)
-                              .slice(0, 3),
-                          );
-                        } else {
-                          setTaxComparisonRows([]);
-                          setComparisonRegimes([]);
-                        }
-	                        if (result) {
-	                          setAiResult(result);
-	                          setAnalysisStep("done");
-	                          setMarketStatus("indisponible");
-	                          const loyerRaw = String(result.loyerEstime || "0");
-                          const loyerMatch = loyerRaw.match(/(\d[\d\s]*)/);
-                          const loyerParsed = loyerMatch ? parseFloat(loyerMatch[1].replace(/\s/g, "")) : 0;
-                          const lp = Number(a.loyer_estime) || loyerParsed || 0;
-                          if (params) {
-                            setProjections(calcProjections(params, Number(a.prix), lp, Number(a.charges_mensuelles), Number(a.taxe_fonciere), Number(a.travaux_estimes), Number(a.autres_couts)));
-                          }
-                        }
-                        setUrl(a.url || "");
-                        setTravaux(Number(a.travaux_estimes) || 0);
-                        setChargesMensuelles(Number(a.charges_mensuelles) || 0);
-                        setTaxeFonciere(Number(a.taxe_fonciere) || 0);
-                        setLoyerEstime(Number(a.loyer_estime) || 0);
-                        setAutresCouts(Number(a.autres_couts) || 0);
-                      }}
+                      onClick={() => loadSavedAnalysis(a)}
                       className="w-full text-left analysis-history-row rounded-lg p-3 transition-colors"
                     >
                       <div className="flex items-center justify-between">

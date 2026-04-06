@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, CreditCard, FolderOpen, Gem, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, CreditCard, FileText, FolderOpen, Gem, Plus, Sparkles } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +15,18 @@ interface Project {
   status: string;
   created_at: string;
   updated_at: string;
+}
+
+interface RecentAnalysis {
+  id: string;
+  project_id: string;
+  ville: string | null;
+  code_postal: string | null;
+  prix: number | null;
+  surface: number | null;
+  created_at: string;
+  analysis_result: { decision?: string } | null;
+  projects: { name: string } | { name: string }[] | null;
 }
 
 const objectifLabels: Record<string, string> = {
@@ -62,23 +74,37 @@ const getStatusTone = (status?: string) => {
   }
 };
 
+const getAnalysisProjectName = (analysis: RecentAnalysis) => {
+  if (Array.isArray(analysis.projects)) return analysis.projects[0]?.name || "Projet";
+  return analysis.projects?.name || "Projet";
+};
+
 const Dashboard = () => {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [recentAnalyses, setRecentAnalyses] = useState<RecentAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("projects")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(8)
-      .then(({ data }) => {
-        setProjects((data as Project[]) || []);
-        setLoading(false);
-      });
+    Promise.all([
+      supabase
+        .from("projects")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(8),
+      supabase
+        .from("project_analyses")
+        .select("id, project_id, ville, code_postal, prix, surface, created_at, analysis_result, projects(name)")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(6),
+    ]).then(([projectsResponse, analysesResponse]) => {
+      setProjects((projectsResponse.data as Project[]) || []);
+      setRecentAnalyses((analysesResponse.data as RecentAnalysis[]) || []);
+      setLoading(false);
+    });
   }, [user]);
 
   const latestProject = projects[0] || null;
@@ -302,59 +328,116 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="dashboard-panel-muted rounded-[2rem] p-5 md:p-6">
-            <div className="space-y-2 border-b border-white/6 pb-5">
-              <p className="premium-eyebrow">Actions utiles</p>
-              <h2 className="text-xl font-semibold text-foreground">Actions utiles</h2>
-              <p className="text-sm text-slate-300/76">
-                Les raccourcis pratiques restent accessibles, mais la priorite visuelle reste sur vos projets.
-              </p>
-            </div>
+          <div className="space-y-5">
+            <div className="dashboard-panel-muted rounded-[2rem] p-5 md:p-6">
+              <div className="space-y-2 border-b border-white/6 pb-5">
+                <p className="premium-eyebrow">Analyses récentes</p>
+                <h2 className="text-xl font-semibold text-foreground">Retrouver vos dernières analyses</h2>
+                <p className="text-sm text-slate-300/76">
+                  L’historique est attaché à chaque projet. Cette vue vous ramène directement au bon dossier et à la
+                  bonne analyse.
+                </p>
+              </div>
 
-            <div className="mt-5 space-y-3">
-              {[
-                {
-                  title: "Analyser un nouveau bien",
-                  description: "Creer un projet et lancer une nouvelle analyse.",
-                  to: "/app/projets/nouveau",
-                  icon: Plus,
-                },
-                {
-                  title: "Ajuster mon abonnement",
-                  description: "Mettre a jour votre formule ou votre facturation.",
-                  to: "/app/abonnement",
-                  icon: CreditCard,
-                },
-                {
-                  title: "Comparer les plans",
-                  description: "Consulter les differences de fonctionnalites.",
-                  to: "/tarifs",
-                  icon: Sparkles,
-                },
-                {
-                  title: "Acceder a l'espace avance",
-                  description: "Ouvrir les ressources et outils complementaires.",
-                  to: "/app/avance",
-                  icon: Gem,
-                },
-              ].map((action) => (
-                <Link key={action.title} to={action.to} className="block">
+              <div className="mt-5 space-y-3">
+                {!loading && recentAnalyses.length === 0 ? (
                   <div className="dashboard-mini-card rounded-[1.4rem] p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex gap-3">
-                        <div className="mt-0.5 rounded-[1rem] border border-white/8 bg-white/[0.04] p-2 text-sky-300">
-                          <action.icon size={16} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{action.title}</p>
-                          <p className="mt-1 text-sm text-slate-300/72">{action.description}</p>
+                    <p className="text-sm font-medium text-foreground">Aucune analyse enregistrée pour le moment.</p>
+                    <p className="mt-1 text-sm text-slate-300/72">
+                      Dès qu’une analyse est lancée dans un projet, elle réapparaît ici.
+                    </p>
+                  </div>
+                ) : (
+                  recentAnalyses.map((analysis) => (
+                    <Link
+                      key={analysis.id}
+                      to={`/app/projets/${analysis.project_id}?analysis=${analysis.id}`}
+                      className="block"
+                    >
+                      <div className="dashboard-mini-card rounded-[1.4rem] p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 gap-3">
+                            <div className="mt-0.5 rounded-[1rem] border border-white/8 bg-white/[0.04] p-2 text-sky-300">
+                              <FileText size={16} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {getAnalysisProjectName(analysis)}
+                              </p>
+                              <p className="mt-1 text-sm text-slate-300/72">
+                                {analysis.ville || analysis.code_postal || "Localisation non renseignée"}
+                                {analysis.prix ? ` · ${analysis.prix.toLocaleString("fr-FR")}€` : ""}
+                                {analysis.surface ? ` · ${analysis.surface}m²` : ""}
+                              </p>
+                              <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+                                {formatDate(analysis.created_at)}
+                                {analysis.analysis_result?.decision ? ` · ${analysis.analysis_result.decision}` : ""}
+                              </p>
+                            </div>
+                          </div>
+                          <ArrowRight size={15} className="mt-1 shrink-0 text-slate-500" />
                         </div>
                       </div>
-                      <ArrowRight size={15} className="mt-1 text-slate-500" />
+                    </Link>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="dashboard-panel-muted rounded-[2rem] p-5 md:p-6">
+              <div className="space-y-2 border-b border-white/6 pb-5">
+                <p className="premium-eyebrow">Actions utiles</p>
+                <h2 className="text-xl font-semibold text-foreground">Actions utiles</h2>
+                <p className="text-sm text-slate-300/76">
+                  Les raccourcis pratiques restent accessibles, mais la priorité visuelle reste sur vos projets.
+                </p>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                {[
+                  {
+                    title: "Analyser un nouveau bien",
+                    description: "Créer un projet et lancer une nouvelle analyse.",
+                    to: "/app/projets/nouveau",
+                    icon: Plus,
+                  },
+                  {
+                    title: "Ajuster mon abonnement",
+                    description: "Mettre à jour votre formule ou votre facturation.",
+                    to: "/app/abonnement",
+                    icon: CreditCard,
+                  },
+                  {
+                    title: "Comparer les plans",
+                    description: "Consulter les différences de fonctionnalités.",
+                    to: "/tarifs",
+                    icon: Sparkles,
+                  },
+                  {
+                    title: "Accéder à l'espace avancé",
+                    description: "Ouvrir les ressources et outils complémentaires.",
+                    to: "/app/avance",
+                    icon: Gem,
+                  },
+                ].map((action) => (
+                  <Link key={action.title} to={action.to} className="block">
+                    <div className="dashboard-mini-card rounded-[1.4rem] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex gap-3">
+                          <div className="mt-0.5 rounded-[1rem] border border-white/8 bg-white/[0.04] p-2 text-sky-300">
+                            <action.icon size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{action.title}</p>
+                            <p className="mt-1 text-sm text-slate-300/72">{action.description}</p>
+                          </div>
+                        </div>
+                        <ArrowRight size={15} className="mt-1 text-slate-500" />
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </motion.section>
